@@ -24,7 +24,6 @@ import {
     submitHomework,
 } from "./api/homework";
 import { AppSidebar } from "./components/app-sidebar";
-import BottomTabBar from "./components/BottomTabBar";
 import { EditorialSectionHeader } from "./components/editorial/MobileBlocks";
 import Header from "./components/Header";
 import SafeView from "./components/SafeView";
@@ -714,8 +713,6 @@ export default function HomeworkPage() {
                     </View>
                 </View>
             </ScrollView>
-
-            <BottomTabBar />
 
             <SubmitModal
                 item={activeItem}

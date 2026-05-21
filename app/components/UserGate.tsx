@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { authenticatedFetch, clearTokens, decodeJWT, getAccessToken, getApiBaseUrl, login, register } from '../api/auth';
+import { PROFILE_ENDPOINTS } from '../api/endpointUtils';
 import { calculateWeightedAverage, getUserGrades } from '../api/grades';
 import { getTeacherProfile } from '../api/teacher';
 import { getStudentProfile } from '../api/users';
@@ -141,15 +142,7 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
       let profileJson: any = null;
       try {
         const base = getApiBaseUrl();
-        const candidates = [
-          "/api/profile/",
-          "/api/auth/user/",
-          "/api/auth/me/",
-          "/api/users/me/",
-          "/api/user/",
-          "/api/uzytkownicy/me/",
-          "/api/uczniowie/me/",
-        ];
+        const candidates = PROFILE_ENDPOINTS;
         try {
           profileJson = await Promise.any(
             candidates.map(async (ep) => {

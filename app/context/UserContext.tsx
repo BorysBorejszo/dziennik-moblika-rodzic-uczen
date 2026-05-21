@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { getAccessToken, authenticatedFetch, clearTokens, decodeJWT } from '../api/auth';
+import { PROFILE_ENDPOINTS } from '../api/endpointUtils';
 import { getTeacherProfile } from '../api/teacher';
 import { getStudentProfile } from '../api/users';
 
@@ -89,15 +90,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
         // try to fetch profile from common endpoints.
         // /api/profile/ is first because it has account_type for role detection.
-        const candidates = [
-          '/api/profile/',
-          '/api/auth/user/',
-          '/api/auth/me/',
-          '/api/users/me/',
-          '/api/user/',
-          '/api/uzytkownicy/me/',
-          '/api/uczniowie/me/',
-        ];
+        const candidates = PROFILE_ENDPOINTS;
         type ProfileShape = { user?: Record<string, unknown>; uczen?: Record<string, unknown>; attendance?: UserData['attendance']; grades?: UserData['grades']; id?: unknown; username?: string; [key: string]: unknown };
         let profile: ProfileShape | null = null;
         for (const ep of candidates) {

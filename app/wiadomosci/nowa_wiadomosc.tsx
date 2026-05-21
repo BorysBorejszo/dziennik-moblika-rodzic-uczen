@@ -67,7 +67,7 @@ export default function NowaWiadomosc() {
                 return;
             }
 
-            console.log("[NowaWiadomosc] Current sender username:", senderUsername);
+            if (__DEV__) console.log("[NowaWiadomosc] Current sender username:", senderUsername);
 
             const senderDjangoId = await findDjangoUserIdByUsername(senderUsername);
 
@@ -80,8 +80,8 @@ export default function NowaWiadomosc() {
                 return;
             }
 
-            console.log("[NowaWiadomosc] Sender Django user.id:", senderDjangoId);
-            console.log("[NowaWiadomosc] Looking for recipient username:", recipientUsername);
+            if (__DEV__) console.log("[NowaWiadomosc] Sender Django user.id:", senderDjangoId);
+            if (__DEV__) console.log("[NowaWiadomosc] Looking for recipient username:", recipientUsername);
 
             const recipientDjangoId = await findDjangoUserIdByUsername(recipientUsername);
 
@@ -94,7 +94,7 @@ export default function NowaWiadomosc() {
                 return;
             }
 
-            console.log("[NowaWiadomosc] Found recipient Django user.id:", recipientDjangoId);
+            if (__DEV__) console.log("[NowaWiadomosc] Found recipient Django user.id:", recipientDjangoId);
 
             const result = await createMessage({
                 nadawca_id: senderDjangoId,

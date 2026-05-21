@@ -8,6 +8,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PROFILE_ENDPOINTS } from "./endpointUtils";
 
 export type LoginResponse = {
   access: string;
@@ -355,17 +356,7 @@ export default {
 // Attempt to resolve the current user's Django user.id by querying common profile endpoints.
 // Returns numeric id when found or null.
 export const getCurrentDjangoUserId = async (): Promise<number | null> => {
-  const endpoints = [
-    "/api/auth/user/",
-    "/api/auth/me/",
-    "/api/users/me/",
-    "/api/user/",
-    "/api/profile/",
-    "/api/uzytkownicy/me/",
-    "/api/uczniowie/me/",
-  ];
-
-  for (const ep of endpoints) {
+  for (const ep of PROFILE_ENDPOINTS) {
     try {
       const url = ep.startsWith("http")
         ? ep
