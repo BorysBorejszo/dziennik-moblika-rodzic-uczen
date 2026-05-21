@@ -128,8 +128,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (profile && !jwtRole) {
           const accountType =
             (profile.account_type as string | undefined) ??
-            ((profile.user as any)?.account_type as string | undefined) ??
-            ((profile.uczen as any)?.account_type as string | undefined);
+            (profile.user?.['account_type'] as string | undefined) ??
+            (profile.uczen?.['account_type'] as string | undefined);
           if (accountType) jwtRole = accountType.toLowerCase();
         }
 

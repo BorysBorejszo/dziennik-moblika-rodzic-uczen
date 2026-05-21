@@ -139,7 +139,16 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
 
       // after successful auth, fetch the server-side profile.
       // /api/profile/ is tried first because it has an account_type field we use for role detection.
-      let profileJson: any = null;
+      type ProfileJson = {
+        account_type?: string;
+        user?: { account_type?: string; first_name?: string; last_name?: string; [key: string]: unknown };
+        uczen?: { account_type?: string; first_name?: string; last_name?: string; [key: string]: unknown };
+        first_name?: string; last_name?: string; firstName?: string; lastName?: string;
+        given_name?: string; family_name?: string; imie?: string; nazwisko?: string;
+        name?: string; username?: string;
+        [key: string]: unknown;
+      } | null;
+      let profileJson: ProfileJson = null;
       try {
         const base = getApiBaseUrl();
         const candidates = PROFILE_ENDPOINTS;
@@ -165,8 +174,8 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
       if (profileJson && !jwtRole) {
         const accountType: string | undefined =
           profileJson.account_type ??
-          (profileJson.user as any)?.account_type ??
-          (profileJson.uczen as any)?.account_type;
+          profileJson.user?.account_type ??
+          profileJson.uczen?.account_type;
         if (accountType) jwtRole = accountType.toLowerCase();
       }
 
@@ -181,7 +190,7 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const normalizeName = (p: any) => {
+      const normalizeName = (p: ProfileJson) => {
         if (!p) return null;
         const candidate = p.user ?? p.uczen ?? p;
         const first =

@@ -70,7 +70,7 @@ export default function Home() {
     }
 
     async function loadDashboard() {
-        const idToUse = (user as any)?.serverId ?? user?.id;
+        const idToUse = user?.serverId ?? user?.id;
         if (!user || typeof idToUse !== "number" || idToUse <= 0) {
             setTodayLessons([]);
             setRecentUpdates([]);

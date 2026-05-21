@@ -2,9 +2,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    FlatList,
     Modal,
     RefreshControl,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -166,7 +166,7 @@ export default function Grades() {
         setLoading(true);
         setError(null);
         try {
-            const serverId = (user as any).serverId ?? user.id;
+            const serverId = user.serverId ?? user.id;
             const gradesResult = await getUserGrades(serverId);
             setSubjects(gradesResult.subjects);
             setBehaviorGrades(gradesResult.behavior ?? null);
@@ -338,7 +338,6 @@ export default function Grades() {
 
         return (
             <TouchableOpacity
-                key={subject.subject}
                 activeOpacity={0.88}
                 onPress={() =>
                     router.push(`/przedmiot/${encodeURIComponent(subject.subject)}`)
@@ -434,7 +433,6 @@ export default function Grades() {
 
         return (
             <TouchableOpacity
-                key={`behavior-${index}`}
                 activeOpacity={0.88}
                 onPress={() => router.push(`/przedmiot/${encodeURIComponent(subject)}`)}
                 style={{ marginTop: index === 0 ? 0 : S[3] }}
@@ -583,117 +581,154 @@ export default function Grades() {
     );
 
     // ---------------------------------------------------------------------------
+    // FlatList header components (memoised for stable references)
+    // ---------------------------------------------------------------------------
+
+    const subjectsListHeader = useMemo(() => (
+        <View style={styles.pageContent}>
+            {renderStatCards()}
+            {renderPeriodFilter()}
+            <View style={{ marginTop: S[4] }}>
+                <SegmentedControl
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                        { key: "subjects", label: "Przedmioty", count: subjects?.length ?? 0 },
+                        { key: "behavior", label: "Zachowanie", count: behaviorGrades?.grades.length ?? 0 },
+                    ]}
+                />
+            </View>
+            <View style={{ marginTop: S[4] }}>
+                <SearchField
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Filtruj przedmiot..."
+                />
+            </View>
+            <View style={{ marginTop: S[6] }}>
+                <SectionHeader
+                    eyebrow="Przegląd"
+                    title="Przedmioty"
+                    meta={String(filteredSubjects.length)}
+                />
+            </View>
+        </View>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [mode, subjects, behaviorGrades, search, filteredSubjects.length, palette, isDark, periodFilter, overallAverage, behaviorGradeLabel, behaviorPointsTotal]);
+
+    const behaviorListHeader = useMemo(() => (
+        <View style={styles.pageContent}>
+            {renderStatCards()}
+            {renderPeriodFilter()}
+            <View style={{ marginTop: S[4] }}>
+                <SegmentedControl
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                        { key: "subjects", label: "Przedmioty", count: subjects?.length ?? 0 },
+                        { key: "behavior", label: "Zachowanie", count: behaviorGrades?.grades.length ?? 0 },
+                    ]}
+                />
+            </View>
+            <View style={{ marginTop: S[6] }}>
+                <SectionHeader
+                    eyebrow="Punkty"
+                    title="Zachowanie"
+                    meta={String(behaviorGrades?.grades.length ?? 0)}
+                />
+            </View>
+        </View>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [mode, subjects, behaviorGrades, palette, isDark, periodFilter, overallAverage, behaviorGradeLabel, behaviorPointsTotal]);
+
+    // ---------------------------------------------------------------------------
     // Render
     // ---------------------------------------------------------------------------
 
     return (
         <>
             <View style={{ flex: 1, backgroundColor: palette.background }}>
-            <Header title="Oceny" subtitle="Podsumowanie ocen z biezacego okresu" />
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 120 }}
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
-                refreshControl={
-                    <RefreshControl
-                        refreshing={loading}
-                        onRefresh={load}
-                        tintColor={palette.primary}
-                    />
-                }
-            >
+                <Header title="Oceny" subtitle="Podsumowanie ocen z biezacego okresu" />
 
-                <View style={styles.pageContent}>
-                    {/* Stat cards */}
-                    {renderStatCards()}
-
-                    {/* Period filter */}
-                    {renderPeriodFilter()}
-
-                    {/* Mode toggle */}
-                    <View style={{ marginTop: S[4] }}>
-                        <SegmentedControl
-                            value={mode}
-                            onChange={setMode}
-                            options={[
-                                { key: "subjects", label: "Przedmioty", count: subjects?.length ?? 0 },
-                                { key: "behavior", label: "Zachowanie", count: behaviorGrades?.grades.length ?? 0 },
-                            ]}
-                        />
-                    </View>
-
-                    {/* Subjects mode */}
-                    {mode === "subjects" ? (
-                        <>
-                            <View style={{ marginTop: S[4] }}>
-                                <SearchField
-                                    value={search}
-                                    onChangeText={setSearch}
-                                    placeholder="Filtruj przedmiot..."
-                                />
+                {mode === "subjects" ? (
+                    <FlatList
+                        data={filteredSubjects}
+                        keyExtractor={(item) => item.subject}
+                        renderItem={({ item, index }) => (
+                            <View style={styles.listItemPadding}>
+                                {renderSubjectCard(item, index)}
                             </View>
-
-                            <View style={{ marginTop: S[6] }}>
-                                <SectionHeader
-                                    eyebrow="Przegląd"
-                                    title="Przedmioty"
-                                    meta={String(filteredSubjects.length)}
-                                />
-
-                                {loading ? (
-                                    <>
-                                        <SkeletonCard />
-                                        <SkeletonCard />
-                                        <SkeletonCard />
-                                        <SkeletonCard />
-                                    </>
-                                ) : error ? (
+                        )}
+                        ListHeaderComponent={subjectsListHeader}
+                        ListEmptyComponent={
+                            loading ? (
+                                <View style={styles.pageContent}>
+                                    <SkeletonCard />
+                                    <SkeletonCard />
+                                    <SkeletonCard />
+                                    <SkeletonCard />
+                                </View>
+                            ) : error ? (
+                                <View style={styles.pageContent}>
                                     <EmptyState
                                         title="Blad pobierania ocen"
                                         subtitle={error}
                                         icon="cloud-offline-outline"
                                     />
-                                ) : filteredSubjects.length === 0 ? (
+                                </View>
+                            ) : (
+                                <View style={styles.pageContent}>
                                     <EmptyState
-                                        title={
-                                            search
-                                                ? "Brak dopasowanych przedmiotow"
-                                                : "Brak ocen"
-                                        }
+                                        title={search ? "Brak dopasowanych przedmiotow" : "Brak ocen"}
                                         subtitle="Gdy pojawia sie pierwsze wpisy, zobaczysz je tutaj."
                                     />
-                                ) : (
-                                    filteredSubjects.map((subject, index) =>
-                                        renderSubjectCard(subject, index)
-                                    )
-                                )}
-                            </View>
-                        </>
-                    ) : mode === "behavior" ? (
-                        /* Behavior mode */
-                        <View style={{ marginTop: S[6] }}>
-                            <SectionHeader
-                                eyebrow="Punkty"
-                                title="Zachowanie"
-                                meta={String(behaviorGrades?.grades.length ?? 0)}
+                                </View>
+                            )
+                        }
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={loading}
+                                onRefresh={load}
+                                tintColor={palette.primary}
                             />
-
-                            {behaviorGrades && behaviorGrades.grades.length > 0 ? (
-                                behaviorGrades.grades.map((grade, index) =>
-                                    renderBehaviorEntry(grade, index)
-                                )
-                            ) : (
+                        }
+                        contentContainerStyle={{ paddingBottom: 120 }}
+                        showsVerticalScrollIndicator={false}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={5}
+                    />
+                ) : (
+                    <FlatList
+                        data={behaviorGrades?.grades ?? []}
+                        keyExtractor={(_, index) => `behavior-${index}`}
+                        renderItem={({ item, index }) => (
+                            <View style={styles.listItemPadding}>
+                                {renderBehaviorEntry(item, index)}
+                            </View>
+                        )}
+                        ListHeaderComponent={behaviorListHeader}
+                        ListEmptyComponent={
+                            <View style={styles.pageContent}>
                                 <EmptyState
                                     title="Brak wpisow zachowania"
                                     subtitle="Gdy pojawia sie punkty dodatnie lub ujemne, zobaczysz je tutaj."
                                     icon="happy-outline"
                                 />
-                            )}
-                        </View>
-                    ) : null}
-                </View>
-            </ScrollView>
+                            </View>
+                        }
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={loading}
+                                onRefresh={load}
+                                tintColor={palette.primary}
+                            />
+                        }
+                        contentContainerStyle={{ paddingBottom: 120 }}
+                        showsVerticalScrollIndicator={false}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={5}
+                    />
+                )}
             </View>
 
             {renderModal()}
@@ -709,6 +744,9 @@ const styles = StyleSheet.create({
     pageContent: {
         paddingHorizontal: S[4],
         paddingTop: S[2],
+    },
+    listItemPadding: {
+        paddingHorizontal: S[4],
     },
 
     // ── Stat cards ────────────────────────────────────────────────────────────

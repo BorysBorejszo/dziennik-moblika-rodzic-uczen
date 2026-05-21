@@ -77,7 +77,7 @@ export default function SubjectDetails() {
             if (!user || !subject) return;
             setLoading(true);
             try {
-                const serverId = (user as any).serverId ?? user.id;
+                const serverId = user.serverId ?? user.id;
                 const res = await getUserGrades(serverId);
                 const found = res.subjects.find((s) => s.subject === subject);
                 if (found) {

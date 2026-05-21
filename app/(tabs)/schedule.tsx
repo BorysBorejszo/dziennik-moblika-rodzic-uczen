@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
 import { CalendarEvent, getDateKey } from "../api/calendar";
 import { Lesson } from "../api/schedule";
 import { DayLessons } from "../components/schedule/DayLessons";
@@ -111,14 +111,102 @@ const Schedule: React.FC = () => {
         month: "long",
     });
 
+    const listHeader = useMemo(() => (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <EditorialSegmentedControl
+                value={viewMode}
+                onChange={(next) => setViewMode(next)}
+                options={[
+                    { key: "day", label: "Dzień" },
+                    { key: "week", label: "Tydzień" },
+                    { key: "month", label: "Miesiąc" },
+                ]}
+            />
+
+            <View style={{ marginTop: 18 }}>
+                {viewMode === "day" ? (
+                    <WeekStrip
+                        selectedDate={selectedDate}
+                        weekDates={weekDates}
+                        scheduleByDay={scheduleByDay}
+                        eventsByDate={eventsByDate}
+                        palette={palette}
+                        onSelectDate={setSelectedDate}
+                        onShiftWeek={shiftWeek}
+                        onGoToToday={goToToday}
+                    />
+                ) : viewMode === "week" ? (
+                    <WeekGrid
+                        selectedDate={selectedDate}
+                        scheduleByDay={scheduleByDay}
+                        eventsByDate={eventsByDate}
+                        palette={palette}
+                        theme={theme}
+                        onSelectDate={setSelectedDate}
+                        onSetViewMode={setViewMode}
+                        onShiftWeek={shiftWeek}
+                        onGoToToday={goToToday}
+                    />
+                ) : (
+                    <MonthGrid
+                        selectedDate={selectedDate}
+                        calendarMonth={calendarMonth}
+                        monthGrid={monthGrid}
+                        eventsByDate={eventsByDate}
+                        palette={palette}
+                        onSelectDate={setSelectedDate}
+                        onShiftMonth={shiftMonth}
+                        onGoToToday={goToToday}
+                    />
+                )}
+            </View>
+
+            {viewMode !== "week" ? (
+                <View style={{ marginTop: 28 }}>
+                    <EditorialSectionHeader eyebrow={selectedDayLabel} title="Lekcje" />
+
+                    {loading && selectedLessons.length === 0 ? (
+                        <EmptyState
+                            title="Ładowanie planu"
+                            subtitle="Odczytuje lekcje dla wybranego dnia."
+                        />
+                    ) : selectedLessons.length === 0 ? (
+                        <EmptyState
+                            title="Brak lekcji w tym dniu"
+                            subtitle="Wybierz inny dzień z kalendarza."
+                        />
+                    ) : (
+                        <DayLessons
+                            selectedDate={selectedDate}
+                            selectedLessons={selectedLessons}
+                            selectedEvents={selectedEvents}
+                            palette={palette}
+                            theme={theme}
+                            onLessonPress={setDetailLesson}
+                            onEventPress={setDetailEvent}
+                        />
+                    )}
+                </View>
+            ) : null}
+
+            {viewMode === "day" ? (
+                <View style={{ marginTop: 28 }}>
+                    <EditorialSectionHeader eyebrow="Tego dnia" title="Wydarzenia" />
+                </View>
+            ) : null}
+        </View>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [viewMode, selectedDate, weekDates, scheduleByDay, eventsByDate, calendarMonth,
+        monthGrid, selectedDayLabel, selectedLessons, selectedEvents, loading,
+        palette, theme]);
+
     return (
         <View style={{ flex: 1, backgroundColor: palette.background }}>
             <Header title="Plan lekcji" subtitle={dateLabel} />
-            <ScrollView
+            <FlatList
                 style={{ flex: 1 }}
                 contentContainerStyle={{ paddingBottom: 120 }}
                 showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -126,110 +214,33 @@ const Schedule: React.FC = () => {
                         tintColor={palette.primary}
                     />
                 }
-            >
-
-                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                    <EditorialSegmentedControl
-                        value={viewMode}
-                        onChange={(next) => setViewMode(next)}
-                        options={[
-                            { key: "day", label: "Dzień" },
-                            { key: "week", label: "Tydzień" },
-                            { key: "month", label: "Miesiąc" },
-                        ]}
-                    />
-
-                    <View style={{ marginTop: 18 }}>
-                        {viewMode === "day" ? (
-                            <WeekStrip
-                                selectedDate={selectedDate}
-                                weekDates={weekDates}
-                                scheduleByDay={scheduleByDay}
-                                eventsByDate={eventsByDate}
-                                palette={palette}
-                                onSelectDate={setSelectedDate}
-                                onShiftWeek={shiftWeek}
-                                onGoToToday={goToToday}
-                            />
-                        ) : viewMode === "week" ? (
-                            <WeekGrid
-                                selectedDate={selectedDate}
-                                scheduleByDay={scheduleByDay}
-                                eventsByDate={eventsByDate}
-                                palette={palette}
-                                theme={theme}
-                                onSelectDate={setSelectedDate}
-                                onSetViewMode={setViewMode}
-                                onShiftWeek={shiftWeek}
-                                onGoToToday={goToToday}
-                            />
-                        ) : (
-                            <MonthGrid
-                                selectedDate={selectedDate}
-                                calendarMonth={calendarMonth}
-                                monthGrid={monthGrid}
-                                eventsByDate={eventsByDate}
-                                palette={palette}
-                                onSelectDate={setSelectedDate}
-                                onShiftMonth={shiftMonth}
-                                onGoToToday={goToToday}
-                            />
-                        )}
+                data={viewMode === "day" ? standaloneEvents : []}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item, index }) => (
+                    <View style={{ paddingHorizontal: 16 }}>
+                        <EventCard
+                            event={item}
+                            index={index}
+                            palette={palette}
+                            theme={theme}
+                            onPress={() => setDetailEvent(item)}
+                        />
                     </View>
-
-                    {viewMode !== "week" ? (
-                        <View style={{ marginTop: 28 }}>
-                            <EditorialSectionHeader eyebrow={selectedDayLabel} title="Lekcje" />
-
-                            {loading && selectedLessons.length === 0 ? (
-                                <EmptyState
-                                    title="Ładowanie planu"
-                                    subtitle="Odczytuje lekcje dla wybranego dnia."
-                                />
-                            ) : selectedLessons.length === 0 ? (
-                                <EmptyState
-                                    title="Brak lekcji w tym dniu"
-                                    subtitle="Wybierz inny dzień z kalendarza."
-                                />
-                            ) : (
-                                <DayLessons
-                                    selectedDate={selectedDate}
-                                    selectedLessons={selectedLessons}
-                                    selectedEvents={selectedEvents}
-                                    palette={palette}
-                                    theme={theme}
-                                    onLessonPress={setDetailLesson}
-                                    onEventPress={setDetailEvent}
-                                />
-                            )}
+                )}
+                ListHeaderComponent={listHeader}
+                ListEmptyComponent={
+                    viewMode === "day" ? (
+                        <View style={{ paddingHorizontal: 16 }}>
+                            <EmptyState
+                                title="Brak wydarzeń"
+                                subtitle="Prace domowe, kartkówki, sprawdziany i ogłoszenia pojawią się tutaj."
+                            />
                         </View>
-                    ) : null}
-
-                    {viewMode === "day" ? (
-                        <View style={{ marginTop: 28 }}>
-                            <EditorialSectionHeader eyebrow="Tego dnia" title="Wydarzenia" />
-
-                            {standaloneEvents.length === 0 ? (
-                                <EmptyState
-                                    title="Brak wydarzeń"
-                                    subtitle="Prace domowe, kartkówki, sprawdziany i ogłoszenia pojawią się tutaj."
-                                />
-                            ) : (
-                                standaloneEvents.map((event, index) => (
-                                    <EventCard
-                                        key={`event-${event.id}`}
-                                        event={event}
-                                        index={index}
-                                        palette={palette}
-                                        theme={theme}
-                                        onPress={() => setDetailEvent(event)}
-                                    />
-                                ))
-                            )}
-                        </View>
-                    ) : null}
-                </View>
-            </ScrollView>
+                    ) : null
+                }
+                initialNumToRender={10}
+                maxToRenderPerBatch={5}
+            />
 
             <LessonDetailModal
                 lesson={detailLesson}
