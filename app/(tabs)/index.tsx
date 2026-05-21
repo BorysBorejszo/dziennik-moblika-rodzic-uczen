@@ -51,7 +51,7 @@ export default function Home() {
     useEffect(() => {
         void loadDashboard();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, user?.serverId, user?.username]);
+    }, [user?.id, user?.serverId]);
 
     async function resolveMessageUserId() {
         let attemptsUserId = Number(user?.serverId ?? user?.id ?? -1);

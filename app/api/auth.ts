@@ -8,6 +8,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "./config";
 import { PROFILE_ENDPOINTS } from "./endpointUtils";
 
 export type LoginResponse = {
@@ -70,9 +71,7 @@ if (typeof global.atob === "undefined") {
   };
 }
 
-// default to the remote dziennik server
-// default to the remote dziennik server (prefer HTTPS)
-let BASE_URL = 'https://modea.polandcentral.cloudapp.azure.com';
+let BASE_URL = API_BASE_URL;
 const ACCESS_KEY = '@e-dziennik:access';
 const REFRESH_KEY = '@e-dziennik:refresh';
 
