@@ -7,7 +7,7 @@
  * const tokens = await login('user', 'pass');
  */
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from "./config";
 import { PROFILE_ENDPOINTS } from "./endpointUtils";
 import { fetchWithTimeout, fetchWithRetry, isAbortError } from "./fetchUtils";
@@ -194,19 +194,18 @@ export const register = async (
 
 export const storeTokens = async (access: string, refresh: string) => {
   try {
-    await AsyncStorage.multiSet([
-      [ACCESS_KEY, access],
-      [REFRESH_KEY, refresh],
+    await Promise.all([
+      SecureStore.setItemAsync(ACCESS_KEY, access),
+      SecureStore.setItemAsync(REFRESH_KEY, refresh),
     ]);
   } catch (e) {
-    // non-fatal; tokens remain in memory only
     console.warn("Failed to persist tokens", e);
   }
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
   try {
-    const token = await AsyncStorage.getItem(ACCESS_KEY);
+    const token = await SecureStore.getItemAsync(ACCESS_KEY);
     if (!token) return null;
     const payload = decodeJWT(token);
     if (payload?.exp !== undefined) {
@@ -263,7 +262,7 @@ export const getDjangoIdFromToken = async (): Promise<number | null> => {
 
 export const getRefreshToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem(REFRESH_KEY);
+    return await SecureStore.getItemAsync(REFRESH_KEY);
   } catch {
     return null;
   }
@@ -271,7 +270,10 @@ export const getRefreshToken = async (): Promise<string | null> => {
 
 export const clearTokens = async () => {
   try {
-    await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
+    await Promise.all([
+      SecureStore.deleteItemAsync(ACCESS_KEY),
+      SecureStore.deleteItemAsync(REFRESH_KEY),
+    ]);
   } catch (e) {
     console.warn("Failed to clear tokens", e);
   }
