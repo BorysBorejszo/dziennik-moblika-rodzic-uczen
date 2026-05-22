@@ -139,19 +139,6 @@ export const DayLessons: React.FC<Props> = ({
         const range = parseTimeRangeMinutes(sorted[i].time);
         const next = sorted[i + 1] ? parseTimeRangeMinutes(sorted[i + 1].time) : null;
 
-        const lineGoesBefore =
-            !inserted &&
-            range.start !== null &&
-            range.end !== null &&
-            nowMin >= range.start &&
-            nowMin <= range.end;
-
-        if (lineGoesBefore) {
-            out.push(<NowLine key={`now-during-${i}`} palette={palette} />);
-            inserted = true;
-            lineJustInserted = true;
-        }
-
         out.push(
             <LessonCard
                 key={`lesson-${sorted[i].id}`}
@@ -167,6 +154,18 @@ export const DayLessons: React.FC<Props> = ({
             />
         );
         lineJustInserted = false;
+
+        if (
+            !inserted &&
+            range.start !== null &&
+            range.end !== null &&
+            nowMin >= range.start &&
+            nowMin <= range.end
+        ) {
+            out.push(<NowLine key={`now-during-${i}`} palette={palette} />);
+            inserted = true;
+            lineJustInserted = true;
+        }
 
         if (
             !inserted &&

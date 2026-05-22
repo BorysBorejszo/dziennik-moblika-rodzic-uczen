@@ -65,6 +65,7 @@ export default function Messages() {
     const { theme } = useTheme();
     const palette = getEditorialPalette(theme);
     const [search, setSearch] = React.useState("");
+    const [showAll, setShowAll] = React.useState(false);
     const [conversations, setConversations] = React.useState<ConversationItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [refreshing, setRefreshing] = React.useState(false);
@@ -153,15 +154,16 @@ export default function Messages() {
     }, [fetchConversations, user?.id, user?.username]);
 
     const filteredConversations = React.useMemo(() => {
-        if (!search) return conversations;
+        const base = showAll ? conversations : conversations.filter((c) => c.unreadCount > 0);
+        if (!search) return base;
         const q = search.toLowerCase();
-        return conversations.filter(
+        return base.filter(
             (c) =>
                 c.partnerName.toLowerCase().includes(q) ||
                 c.lastMessage.tresc.toLowerCase().includes(q) ||
                 c.lastMessage.temat.toLowerCase().includes(q)
         );
-    }, [conversations, search]);
+    }, [conversations, search, showAll]);
 
     const totalUnread = React.useMemo(
         () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
@@ -241,6 +243,15 @@ export default function Messages() {
                                 meta={String(filteredConversations.length)}
                             />
 
+                            <TouchableOpacity
+                                onPress={() => setShowAll((v) => !v)}
+                                style={[styles.toggleBtn, { backgroundColor: showAll ? palette.surfaceMid : palette.primaryFixed }]}
+                            >
+                                <Text style={[T.label, { color: showAll ? palette.textSoft : palette.primary, fontWeight: "600" }]}>
+                                    {showAll ? "Tylko nieprzeczytane" : "Pokaż wszystkie"}
+                                </Text>
+                            </TouchableOpacity>
+
                             {loading ? (
                                 <View style={styles.skeletonList}>
                                     <SkeletonCard />
@@ -251,8 +262,8 @@ export default function Messages() {
                                 <ErrorState message={error} onRetry={() => void fetchConversations()} />
                             ) : filteredConversations.length === 0 ? (
                                 <EmptyPlaceholder
-                                    title={search ? "Brak wynikow" : "Brak rozmow"}
-                                    subtitle="Nowe rozmowy pojawia sie tutaj po synchronizacji."
+                                    title={search ? "Brak wynikow" : showAll ? "Brak rozmow" : "Brak nowych wiadomosci"}
+                                    subtitle={showAll || search ? "Nowe rozmowy pojawia sie tutaj po synchronizacji." : "Wszystkie wiadomosci zostaly przeczytane."}
                                     icon="chatbubbles-outline"
                                 />
                             ) : (
@@ -415,5 +426,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 6,
+    },
+    toggleBtn: {
+        alignSelf: "flex-end",
+        borderRadius: R.full,
+        paddingHorizontal: S[4],
+        paddingVertical: S[2],
+        marginBottom: S[3],
     },
 });

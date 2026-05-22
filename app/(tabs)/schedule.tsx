@@ -51,17 +51,6 @@ const Schedule: React.FC = () => {
     const { scheduleByDay, eventsByDate, loading, refreshing, error: scheduleError, load, setRefreshing } =
         useScheduleData(user);
 
-    const dateLabel = useMemo(
-        () =>
-            new Date().toLocaleDateString("pl-PL", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-            }),
-        []
-    );
-
     const selectedKey = getDateKey(selectedDate);
     const selectedLessons = useMemo(() => {
         const idx = scheduleDayIndex(selectedDate);
@@ -164,8 +153,6 @@ const Schedule: React.FC = () => {
 
             {viewMode !== "week" ? (
                 <View style={{ marginTop: 28 }}>
-                    <EditorialSectionHeader eyebrow={selectedDayLabel} title="Lekcje" />
-
                     {loading && selectedLessons.length === 0 ? (
                         <EmptyState
                             title="Ładowanie planu"
@@ -204,7 +191,7 @@ const Schedule: React.FC = () => {
     if (scheduleError && !loading && !refreshing) {
         return (
             <View style={{ flex: 1, backgroundColor: palette.background }}>
-                <Header title="Plan lekcji" subtitle={dateLabel} />
+                <Header title="Plan lekcji" />
                 <ErrorState message={scheduleError} onRetry={() => { setRefreshing(true); void load(); }} />
             </View>
         );
@@ -212,7 +199,7 @@ const Schedule: React.FC = () => {
 
     return (
         <View style={{ flex: 1, backgroundColor: palette.background }}>
-            <Header title="Plan lekcji" subtitle={dateLabel} />
+            <Header title="Plan lekcji" />
             <FlatList
                 style={{ flex: 1 }}
                 contentContainerStyle={{ paddingBottom: 120 }}
