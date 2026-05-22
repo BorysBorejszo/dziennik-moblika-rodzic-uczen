@@ -80,11 +80,6 @@ export default function ParentHome({ onNavigate }: Props) {
       >
 
       <View style={styles.body}>
-        <View style={[styles.roleBadge, { backgroundColor: palette.primaryFixed }]}>
-          <Ionicons name="people-outline" size={14} color={palette.primary} />
-          <Text style={[T.labelBold, { color: palette.primary }]}>Rodzic</Text>
-        </View>
-
         {childLoading ? (
           <ActivityIndicator color={palette.primary} style={{ marginBottom: S[4] }} />
         ) : studentList.length > 1 ? (
@@ -203,16 +198,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingBottom: 120 },
   body: { paddingHorizontal: S[4], paddingTop: S[2] },
-  roleBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: R.full,
-    paddingHorizontal: S[3],
-    paddingVertical: S[1] + 2,
-    gap: S[1] + 2,
-    marginBottom: S[4],
-  },
   childSwitcher: { marginBottom: S[4] },
   childChip: {
     marginRight: S[3],

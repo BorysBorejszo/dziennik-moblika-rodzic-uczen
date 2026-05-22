@@ -4,7 +4,7 @@ import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacit
 import { getCurrentDjangoUserId, getDjangoIdFromToken } from "../api/auth";
 import { getAllMessages, getInboxMessages, getSentMessages, MessageRecord } from "../api/messages";
 import { findDjangoUserIdByUsername } from "../api/users";
-import { Card, SearchField, SectionHeader, StatCard, PrimaryButton, EmptyPlaceholder } from "../components/editorial/MobileBlocks";
+import { Card, SearchField, SectionHeader, PrimaryButton, EmptyPlaceholder } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
 import ErrorState from "../components/ErrorState";
 import { SkeletonCard } from "../components/ui/SkeletonItem";
@@ -198,27 +198,6 @@ export default function Messages() {
                     }
                 >
                     <View style={styles.body}>
-                        <View style={styles.statRow}>
-                            <View style={styles.statCell}>
-                                <StatCard
-                                    eyebrow="Nieprzeczytane"
-                                    value={String(totalUnread).padStart(2, "0")}
-                                    caption="Liczba wiadomosci oczekujacych na przeczytanie."
-                                    icon="mail-unread-outline"
-                                    tone="primary"
-                                />
-                            </View>
-                            <View style={styles.statCell}>
-                                <StatCard
-                                    eyebrow="Rozmowy"
-                                    value={String(filteredConversations.length).padStart(2, "0")}
-                                    caption="Liczba aktywnych rozmow."
-                                    icon="chatbubbles-outline"
-                                    tone="neutral"
-                                />
-                            </View>
-                        </View>
-
                         <View style={styles.controlRow}>
                             <SearchField
                                 value={search}
@@ -377,13 +356,6 @@ const styles = StyleSheet.create({
     body: {
         paddingHorizontal: S[4],
         paddingTop: S[2],
-    },
-    statRow: {
-        flexDirection: "row",
-        gap: S[3],
-    },
-    statCell: {
-        flex: 1,
     },
     controlRow: {
         marginTop: S[3],

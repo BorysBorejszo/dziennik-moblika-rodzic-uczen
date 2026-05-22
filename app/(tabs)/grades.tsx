@@ -594,8 +594,8 @@ export default function Grades() {
                     value={mode}
                     onChange={setMode}
                     options={[
-                        { key: "subjects", label: "Przedmioty", count: subjects?.length ?? 0 },
-                        { key: "behavior", label: "Zachowanie", count: behaviorGrades?.grades.length ?? 0 },
+                        { key: "subjects", label: "Przedmioty" },
+                        { key: "behavior", label: "Zachowanie" },
                     ]}
                 />
             </View>
@@ -626,8 +626,8 @@ export default function Grades() {
                     value={mode}
                     onChange={setMode}
                     options={[
-                        { key: "subjects", label: "Przedmioty", count: subjects?.length ?? 0 },
-                        { key: "behavior", label: "Zachowanie", count: behaviorGrades?.grades.length ?? 0 },
+                        { key: "subjects", label: "Przedmioty" },
+                        { key: "behavior", label: "Zachowanie" },
                     ]}
                 />
             </View>
