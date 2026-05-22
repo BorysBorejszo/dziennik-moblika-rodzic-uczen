@@ -133,7 +133,7 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
           jwtRole = payload.role;
           jwtUczenIdRaw = payload.uczen_id as number | undefined;
           jwtUserIdRaw = payload.user_id as number | undefined;
-          jwtUczenId = payload.uczen_id ?? payload.user_id ?? payload.id ?? payload.sub;
+          jwtUczenId = payload.uczen_id ?? payload.user_id ?? (payload.id as number | undefined) ?? (payload.sub as number | undefined);
           jwtClassId = payload.klasa_id as number | undefined;
           jwtNauczycielId = payload.nauczyciel_id as number | undefined;
           // infer teacher role from JWT when role field is absent but nauczyciel_id is present
