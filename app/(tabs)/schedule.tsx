@@ -20,6 +20,7 @@ import {
     EditorialSegmentedControl,
 } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import EmptyState from "../components/ui/EmptyState";
 import { useUser } from "../context/UserContext";
 import { useScheduleData } from "../hooks/useScheduleData";
@@ -47,7 +48,7 @@ const Schedule: React.FC = () => {
     const [detailLesson, setDetailLesson] = useState<Lesson | null>(null);
     const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
 
-    const { scheduleByDay, eventsByDate, loading, refreshing, load, setRefreshing } =
+    const { scheduleByDay, eventsByDate, loading, refreshing, error: scheduleError, load, setRefreshing } =
         useScheduleData(user);
 
     const dateLabel = useMemo(
@@ -199,6 +200,15 @@ const Schedule: React.FC = () => {
     ), [viewMode, selectedDate, weekDates, scheduleByDay, eventsByDate, calendarMonth,
         monthGrid, selectedDayLabel, selectedLessons, selectedEvents, loading,
         palette, theme]);
+
+    if (scheduleError && !loading && !refreshing) {
+        return (
+            <View style={{ flex: 1, backgroundColor: palette.background }}>
+                <Header title="Plan lekcji" subtitle={dateLabel} />
+                <ErrorState message={scheduleError} onRetry={() => { setRefreshing(true); void load(); }} />
+            </View>
+        );
+    }
 
     return (
         <View style={{ flex: 1, backgroundColor: palette.background }}>

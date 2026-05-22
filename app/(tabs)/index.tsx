@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import ErrorState from "../components/ErrorState";
 import { getCurrentDjangoUserId, getDjangoIdFromToken } from "../api/auth";
 import { getUserHomeData, TodayLesson, UpdateItem } from "../api/home";
 import {
@@ -36,6 +37,8 @@ export default function Home() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     const formattedDate = useMemo(
         () =>
@@ -51,7 +54,7 @@ export default function Home() {
     useEffect(() => {
         void loadDashboard();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, user?.serverId]);
+    }, [user?.id, user?.serverId, reloadKey]);
 
     async function resolveMessageUserId() {
         let attemptsUserId = Number(user?.serverId ?? user?.id ?? -1);
@@ -81,6 +84,7 @@ export default function Home() {
             return;
         }
         setLoading(true);
+        setFetchError(null);
         try {
             const messageUserId = await resolveMessageUserId();
             const homeData = await getUserHomeData({
@@ -98,6 +102,7 @@ export default function Home() {
             setRecentUpdates([]);
             setGradeAverage("—");
             setUnreadCount(0);
+            setFetchError((error instanceof Error ? error.message : null) ?? 'Błąd ładowania danych');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -105,6 +110,15 @@ export default function Home() {
     }
 
     const nextLesson = todayLessons[0] ?? null;
+
+    if (fetchError && !loading) {
+        return (
+            <View style={[styles.root, { backgroundColor: palette.background }]}>
+                <Header title={`Dzien dobry, ${firstName}`} subtitle={formattedDate} />
+                <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+            </View>
+        );
+    }
 
     return (
         <View style={[styles.root, { backgroundColor: palette.background }]}>

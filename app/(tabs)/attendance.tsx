@@ -19,6 +19,7 @@ import {
 } from "../api/attendance";
 import { EditorialPanel, SectionHeader } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import Card from "../components/ui/Card";
 import EmptyState from "../components/ui/EmptyState";
 import { useUser } from "../context/UserContext";
@@ -222,6 +223,8 @@ export default function Attendance() {
     const [showCompact, setShowCompact] = useState(false);
     const [entries, setEntries] = useState<AttendanceEntry[] | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
     const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
     const [selectedEntry, setSelectedEntry] = useState<AttendanceEntry | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -236,6 +239,7 @@ export default function Attendance() {
     const fetchData = useCallback(async () => {
         if (!studentId) return;
         setRefreshing(true);
+        setFetchError(null);
         try {
             const res = await getUserAttendance(studentId);
             const sorted = res.recent
@@ -246,10 +250,11 @@ export default function Attendance() {
         } catch (error) {
             console.error("[attendance] Failed to fetch attendance:", error);
             setEntries([]);
+            setFetchError((error instanceof Error ? error.message : null) ?? 'Błąd ładowania danych');
         } finally {
             setRefreshing(false);
         }
-    }, [studentId]);
+    }, [studentId, reloadKey]);
 
     const closeDetailsModal = useCallback(() => {
         latestDetailsRequestIdRef.current = null;
@@ -359,6 +364,15 @@ export default function Attendance() {
         () => subjectSummaries.filter((s) => s.status === "critical"),
         [subjectSummaries]
     );
+
+    if (fetchError && !refreshing) {
+        return (
+            <View style={[styles.root, { backgroundColor: palette.background }]}>
+                <Header title="Frekwencja" subtitle="Podglad obecnosci i nieobecnosci" />
+                <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+            </View>
+        );
+    }
 
     return (
         <>

@@ -8,6 +8,7 @@ export type ScheduleData = {
     eventsByDate: Map<string, CalendarEvent[]>;
     loading: boolean;
     refreshing: boolean;
+    error: string | null;
     load: () => Promise<void>;
     setRefreshing: (v: boolean) => void;
 };
@@ -17,12 +18,14 @@ export function useScheduleData(user: UserData | null): ScheduleData {
     const [eventsByDate, setEventsByDate] = useState<Map<string, CalendarEvent[]>>(new Map());
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!user) return;
         const studentId = (user.serverId ?? user.id) as number | undefined;
         if (!studentId) return;
         setLoading(true);
+        setError(null);
         try {
             const [scheduleResult, calendarResult] = await Promise.all([
                 getUserSchedule(studentId, user.classId ?? undefined),
@@ -36,10 +39,11 @@ export function useScheduleData(user: UserData | null): ScheduleData {
             });
             setScheduleByDay(grouped);
             setEventsByDate(calendarResult.eventsByDate);
-        } catch (error) {
-            console.error("[schedule] Failed to fetch schedule:", error);
+        } catch (err) {
+            console.error("[schedule] Failed to fetch schedule:", err);
             setScheduleByDay([[], [], [], [], []]);
             setEventsByDate(new Map());
+            setError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania planu lekcji');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -50,7 +54,7 @@ export function useScheduleData(user: UserData | null): ScheduleData {
         void load();
     }, [load]);
 
-    return { scheduleByDay, eventsByDate, loading, refreshing, load, setRefreshing };
+    return { scheduleByDay, eventsByDate, loading, refreshing, error, load, setRefreshing };
 }
 
 export default function UseScheduleDataRoute() { return null; }

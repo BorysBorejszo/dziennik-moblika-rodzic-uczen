@@ -20,6 +20,7 @@ import {
   EditorialSegmentedControl,
 } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import EmptyState from "../components/ui/EmptyState";
 import { CalendarEvent } from "../api/calendar";
 import { useParent } from "../context/ParentContext";
@@ -37,6 +38,8 @@ export default function ParentSchedule() {
   const [eventsByDate, setEventsByDate] = useState<Map<string, CalendarEvent[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -55,6 +58,7 @@ export default function ParentSchedule() {
 
   const load = useCallback(async () => {
     if (!activeChild) { setLoading(false); return; }
+    setFetchError(null);
     try {
       const classId = activeChild.class_id ?? undefined;
       const [scheduleResult, calendarResult] = await Promise.all([
@@ -69,11 +73,14 @@ export default function ParentSchedule() {
       });
       setScheduleByDay(grouped);
       setEventsByDate(calendarResult.eventsByDate);
+    } catch (err) {
+      console.error("[parent_schedule] Failed to load:", err);
+      setFetchError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania planu lekcji');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeChild?.id, activeChild?.class_id]);
+  }, [activeChild?.id, activeChild?.class_id, reloadKey]);
 
   useEffect(() => { setLoading(true); void load(); }, [load]);
 
@@ -121,6 +128,15 @@ export default function ParentSchedule() {
   const childName = activeChild
     ? `${activeChild.first_name} ${activeChild.last_name}`
     : "Uczeń";
+
+  if (fetchError && !loading && !refreshing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: palette.background }}>
+        <Header title="Plan lekcji" subtitle={childName} />
+        <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.background }}>

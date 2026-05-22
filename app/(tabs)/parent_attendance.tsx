@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import {
   createParentExcuse,
   getParentAttendance,
@@ -43,6 +44,8 @@ export default function ParentAttendance() {
   const [records, setRecords] = useState<ParentAttendanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [excuseModal, setExcuseModal] = useState(false);
@@ -51,9 +54,13 @@ export default function ParentAttendance() {
 
   const load = async () => {
     if (!activeChild) { setLoading(false); return; }
+    setFetchError(null);
     try {
       const data = await getParentAttendance(activeChild.id);
       setRecords(data.sort((a, b) => b.data.localeCompare(a.data)));
+    } catch (err) {
+      console.error("[parent_attendance] Failed to load:", err);
+      setFetchError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania danych');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -65,7 +72,7 @@ export default function ParentAttendance() {
     setSelected(new Set());
     setSelectMode(false);
     void load();
-  }, [activeChild?.id]);
+  }, [activeChild?.id, reloadKey]);
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -107,6 +114,15 @@ export default function ParentAttendance() {
   const childName = activeChild
     ? `${activeChild.first_name} ${activeChild.last_name}`
     : "Uczeń";
+
+  if (fetchError && !loading) {
+    return (
+      <View style={[styles.root, { backgroundColor: palette.background }]}>
+        <Header title="Frekwencja" subtitle={childName} />
+        <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background }]}>

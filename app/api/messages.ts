@@ -1,4 +1,5 @@
 import { authenticatedFetch, getAccessToken, getApiBaseUrl } from "./auth";
+import { fetchWithTimeout } from "./fetchUtils";
 import { ADMIN_KEY } from "./constants";
 
 // API Types
@@ -248,7 +249,7 @@ export const fetchUserMessagesRemote = async (
       );
       // Try a plain unauthenticated fetch to see what the server responds without Authorization
       try {
-        const bare = await fetch(url, { headers: headers() });
+        const bare = await fetchWithTimeout(url, { headers: headers() });
         const text = await bare.text().catch(() => "");
         console.warn(
           `[fetchUserMessagesRemote] unauthenticated fetch status=${bare.status} body=${text?.slice(0, 1000)}`,

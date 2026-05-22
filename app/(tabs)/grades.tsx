@@ -23,6 +23,7 @@ import {
     SectionHeader,
 } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import EmptyState from "../components/ui/EmptyState";
 import { SkeletonCard } from "../components/ui/SkeletonItem";
 import { useUser } from "../context/UserContext";
@@ -669,13 +670,7 @@ export default function Grades() {
                                     <SkeletonCard />
                                 </View>
                             ) : error ? (
-                                <View style={styles.pageContent}>
-                                    <EmptyState
-                                        title="Blad pobierania ocen"
-                                        subtitle={error}
-                                        icon="cloud-offline-outline"
-                                    />
-                                </View>
+                                <ErrorState message={error} onRetry={load} />
                             ) : (
                                 <View style={styles.pageContent}>
                                     <EmptyState

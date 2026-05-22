@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import { getHomeworkForClass, ParentHomework as HomeworkItem } from "../api/parent";
 import { listSubjects } from "../api/grades";
 import { useParent } from "../context/ParentContext";
@@ -29,9 +30,12 @@ export default function ParentHomework({ onBack }: { onBack?: () => void } = {})
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const load = async () => {
     if (!activeChild?.class_id) { setLoading(false); return; }
+    setFetchError(null);
     try {
       const [hw, subjects] = await Promise.all([
         getHomeworkForClass(activeChild.class_id),
@@ -39,6 +43,9 @@ export default function ParentHomework({ onBack }: { onBack?: () => void } = {})
       ]);
       setHomework(hw);
       setSubjectMap(new Map(subjects.map((s) => [s.id, s.nazwa])));
+    } catch (err) {
+      console.error("[parent_homework] Failed to load:", err);
+      setFetchError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania danych');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -48,7 +55,7 @@ export default function ParentHomework({ onBack }: { onBack?: () => void } = {})
   useEffect(() => {
     setLoading(true);
     void load();
-  }, [activeChild?.id]);
+  }, [activeChild?.id, reloadKey]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -85,6 +92,15 @@ export default function ParentHomework({ onBack }: { onBack?: () => void } = {})
     { key: "active", label: "Aktualne" },
     { key: "overdue", label: "Po terminie" },
   ];
+
+  if (fetchError && !loading) {
+    return (
+      <View style={[styles.root, { backgroundColor: palette.background }]}>
+        <Header title="Prace domowe" subtitle={childName} onBack={onBack} />
+        <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background }]}>

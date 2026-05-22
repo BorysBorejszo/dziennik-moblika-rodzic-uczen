@@ -10,6 +10,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "./config";
 import { PROFILE_ENDPOINTS } from "./endpointUtils";
+import { fetchWithTimeout, fetchWithRetry, isAbortError } from "./fetchUtils";
 
 export type LoginResponse = {
   access: string;
@@ -108,11 +109,11 @@ export const login = async (
 ): Promise<LoginResponse> => {
   const url = `${BASE_URL}/api/auth/login/`;
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
-  });
+  }, 15_000);
 
   if (!res.ok) {
     let text = await res.text();
@@ -156,11 +157,11 @@ export const register = async (
 
   const body = JSON.stringify({ username, password, ...extra });
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
-  });
+  }, 15_000);
 
   if (!res.ok) {
     let text = await res.text();
@@ -294,11 +295,11 @@ export const refreshAuth = async (): Promise<LoginResponse | null> => {
 
     const url = `${BASE_URL}/api/auth/refresh/`;
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh }),
-      });
+      }, 15_000);
 
       if (!res.ok) {
         // refresh failed -> clear stored tokens
@@ -346,7 +347,11 @@ export const authenticatedFetch = async (
     }
     if (access) headers.set("Authorization", `Bearer ${access}`);
 
-    return fetch(input, { ...init, headers });
+    const method = (init.method ?? 'GET').toUpperCase();
+    if (method === 'GET') {
+      return fetchWithRetry(input as string, { ...init, headers });
+    }
+    return fetchWithTimeout(input, { ...init, headers });
   };
 
   const access = await getAccessToken();

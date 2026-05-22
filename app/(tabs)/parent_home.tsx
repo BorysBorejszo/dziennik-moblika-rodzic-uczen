@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import { getParentGrades, ParentSubjectGrades } from "../api/parent";
 import { useParent } from "../context/ParentContext";
 import { useUser } from "../context/UserContext";
@@ -26,6 +27,8 @@ export default function ParentHome({ onNavigate }: Props) {
 
   const [grades, setGrades] = useState<ParentSubjectGrades[]>([]);
   const [gradesLoading, setGradesLoading] = useState(false);
+  const [gradesError, setGradesError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const rawName = user?.name ?? "";
   const firstName = rawName.split(/[_\s]+/)[0] ?? "Rodzicu";
@@ -42,10 +45,15 @@ export default function ParentHome({ onNavigate }: Props) {
   useEffect(() => {
     if (!activeChild) return;
     setGradesLoading(true);
+    setGradesError(null);
     getParentGrades(activeChild.id)
       .then(setGrades)
+      .catch((err: unknown) => {
+        console.error("[parent_home] Failed to load grades:", err);
+        setGradesError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania ocen');
+      })
       .finally(() => setGradesLoading(false));
-  }, [activeChild?.id]);
+  }, [activeChild?.id, reloadKey]);
 
   const overallAvg = (() => {
     const avgs = grades
@@ -140,22 +148,26 @@ export default function ParentHome({ onNavigate }: Props) {
         ) : null}
 
         {activeChild && (
-          <View style={[styles.statsRow]}>
-            <View style={[styles.statCard, { backgroundColor: palette.surface }, shadow]}>
-              <Ionicons name="ribbon-outline" size={20} color={palette.success} />
-              <Text style={[T.title, { color: palette.text }]}>
-                {gradesLoading ? "—" : overallAvg ?? "—"}
-              </Text>
-              <Text style={[T.label, { color: palette.textSoft }]}>Śr. ocen</Text>
+          gradesError ? (
+            <ErrorState message={gradesError} onRetry={() => setReloadKey(k => k + 1)} />
+          ) : (
+            <View style={[styles.statsRow]}>
+              <View style={[styles.statCard, { backgroundColor: palette.surface }, shadow]}>
+                <Ionicons name="ribbon-outline" size={20} color={palette.success} />
+                <Text style={[T.title, { color: palette.text }]}>
+                  {gradesLoading ? "—" : overallAvg ?? "—"}
+                </Text>
+                <Text style={[T.label, { color: palette.textSoft }]}>Śr. ocen</Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: palette.surface }, shadow]}>
+                <Ionicons name="school-outline" size={20} color={palette.primary} />
+                <Text style={[T.title, { color: palette.text }]}>
+                  {grades.length}
+                </Text>
+                <Text style={[T.label, { color: palette.textSoft }]}>Przedmioty</Text>
+              </View>
             </View>
-            <View style={[styles.statCard, { backgroundColor: palette.surface }, shadow]}>
-              <Ionicons name="school-outline" size={20} color={palette.primary} />
-              <Text style={[T.title, { color: palette.text }]}>
-                {grades.length}
-              </Text>
-              <Text style={[T.label, { color: palette.textSoft }]}>Przedmioty</Text>
-            </View>
-          </View>
+          )
         )}
 
         <Text style={[T.title, styles.sectionTitle, { color: palette.text }]}>

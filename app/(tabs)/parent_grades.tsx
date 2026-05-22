@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import { getParentGrades, gradeColor, gradeLabel, ParentSubjectGrades } from "../api/parent";
 import { useParent } from "../context/ParentContext";
 import { R, S, T, cardShadow, getEditorialPalette } from "../theme/editorial";
@@ -25,12 +26,18 @@ export default function ParentGrades() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const load = async () => {
     if (!activeChild) { setLoading(false); return; }
+    setFetchError(null);
     try {
       const data = await getParentGrades(activeChild.id);
       setSubjects(data);
+    } catch (err) {
+      console.error("[parent_grades] Failed to load:", err);
+      setFetchError((err instanceof Error ? err.message : null) ?? 'Błąd ładowania danych');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -40,7 +47,7 @@ export default function ParentGrades() {
   useEffect(() => {
     setLoading(true);
     void load();
-  }, [activeChild?.id]);
+  }, [activeChild?.id, reloadKey]);
 
   const toggle = (id: number) => {
     setExpanded((prev) => {
@@ -53,6 +60,15 @@ export default function ParentGrades() {
   const childName = activeChild
     ? `${activeChild.first_name} ${activeChild.last_name}`
     : "Uczeń";
+
+  if (fetchError && !loading) {
+    return (
+      <View style={[styles.root, { backgroundColor: palette.background }]}>
+        <Header title="Oceny" subtitle={childName} />
+        <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: palette.background }]}>

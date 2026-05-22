@@ -6,6 +6,7 @@ import { convertToDisplayMessage, getInboxMessages, getSentMessages, Message, up
 import { findDjangoUserIdByUsername } from "../api/users";
 import { Card, SearchField, SectionHeader, SegmentedControl, StatCard, PrimaryButton, EmptyPlaceholder } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
+import ErrorState from "../components/ErrorState";
 import { SkeletonCard } from "../components/ui/SkeletonItem";
 import UserGate from "../components/UserGate";
 import { useUser } from "../context/UserContext";
@@ -225,11 +226,7 @@ export default function Messages() {
                                     <SkeletonCard />
                                 </View>
                             ) : error ? (
-                                <EmptyPlaceholder
-                                    title="Blad pobierania wiadomosci"
-                                    subtitle={error}
-                                    icon="alert-circle-outline"
-                                />
+                                <ErrorState message={error} onRetry={() => void fetchMessages()} />
                             ) : filteredMessages.length === 0 ? (
                                 <EmptyPlaceholder
                                     title={
