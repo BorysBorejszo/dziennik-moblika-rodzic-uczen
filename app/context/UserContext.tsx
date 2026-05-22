@@ -35,6 +35,8 @@ interface UserContextType {
   switchUser: (userId: number) => void;
   clearUser: () => void;
   ready: boolean;
+  error: string | null;
+  retryInit: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -42,9 +44,20 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<UserData | null>(null);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initKey, setInitKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
+    setError(null);
+
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        setError('Nie można załadować profilu. Sprawdź połączenie z internetem.');
+        if (mounted) setReady(true);
+      }
+    }, 15_000);
+
     (async () => {
       try {
         const access = await getAccessToken();
@@ -227,10 +240,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       } catch {
         // ignore
       }
-      if (mounted) setReady(true);
+      if (mounted) {
+        clearTimeout(timeoutId);
+        setReady(true);
+      }
     })();
-    return () => { mounted = false; };
-  }, []);
+    return () => { mounted = false; clearTimeout(timeoutId); };
+  }, [initKey]);
 
   const setUser = (u: UserData) => {
     setUserState(u);
@@ -238,10 +254,18 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const clearUser = () => {
     setUserState(null);
+    setError(null);
     AsyncStorage.removeItem('selectedUserId').catch(() => {});
     AsyncStorage.removeItem('@e-dziennik:username').catch(() => {}); // Clear stored username
     // also clear tokens in case of logout
     clearTokens().catch(() => {});
+  };
+
+  const retryInit = () => {
+    setError(null);
+    setReady(false);
+    setUserState(null);
+    setInitKey(k => k + 1);
   };
 
   const switchUser = (_userId: number) => {
@@ -250,7 +274,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <UserContext.Provider value={{ user, users: [], setUser, switchUser, clearUser, ready }}>
+    <UserContext.Provider value={{ user, users: [], setUser, switchUser, clearUser, ready, error, retryInit }}>
       {children}
     </UserContext.Provider>
   );

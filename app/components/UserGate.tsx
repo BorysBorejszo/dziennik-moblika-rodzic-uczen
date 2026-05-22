@@ -13,7 +13,7 @@ import PasswordInput from './ui/PasswordInput';
 const USERNAME_KEY = '@e-dziennik:username';
 
 export default function UserGate({ children }: { children: React.ReactNode }) {
-  const { user, setUser, ready } = useUser();
+  const { user, setUser, ready, error, retryInit, clearUser } = useUser();
   const { theme } = useTheme();
   const bg = theme === "dark" ? "#000" : "#fff";
   const textClass = theme === "dark" ? "text-white" : "text-black";
@@ -70,6 +70,32 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
         className="items-center justify-center px-6"
       >
         <ActivityIndicator color={theme === "dark" ? "#fff" : "#000"} />
+      </View>
+    );
+  }
+  if (error) {
+    return (
+      <View style={{ flex: 1, backgroundColor: bg }} className="items-center justify-center px-6">
+        <Text className={`${textClass} text-lg font-bold mb-4 text-center`}>
+          Nie można załadować profilu
+        </Text>
+        <Text className={`${theme === 'dark' ? 'text-neutral-400' : 'text-gray-600'} text-center mb-8`}>
+          {error}
+        </Text>
+        <TouchableOpacity
+          onPress={retryInit}
+          accessibilityRole="button"
+          className="p-4 rounded-xl bg-blue-500 w-full mb-3"
+        >
+          <Text className="text-white text-center font-semibold">Spróbuj ponownie</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={clearUser}
+          accessibilityRole="button"
+          className="p-4 rounded-xl bg-red-500 w-full"
+        >
+          <Text className="text-white text-center font-semibold">Zaloguj się ponownie</Text>
+        </TouchableOpacity>
       </View>
     );
   }
