@@ -214,7 +214,7 @@ export default function Layout() {
         {/* top-level safe area: ensure header/toolbar area is stable across pages */}
         <SafeView edges={['top']} style={{ flex: 1, backgroundColor: bg }}>
           {/* App Sidebar (sliding drawer) */}
-          <AppSidebar />
+          <AppSidebar onNavigate={navigateToIndex} />
 
           {/* Trigger removed from top — triggers are placed inline in page headers */}
 

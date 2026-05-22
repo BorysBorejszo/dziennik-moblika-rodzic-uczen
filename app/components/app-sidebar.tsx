@@ -13,12 +13,23 @@ import { useUser } from "../context/UserContext";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from "expo-router";
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  onNavigate?: (index: number) => void;
+}
+
+export function AppSidebar({ onNavigate }: AppSidebarProps) {
   const { close } = useSidebar();
   const { theme } = useTheme();
   const { user } = useUser();
   const isParent = user?.role?.toLowerCase() === "rodzic";
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const navigate = (index: number) => {
+    close();
+    if (onNavigate) {
+      onNavigate(index);
+    }
+  };
 
   return (
     <Sidebar>
@@ -28,31 +39,31 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup title="Nawigacja">
-          <TouchableOpacity onPress={() => { close(); router.push('/'); }} style={{ paddingVertical: 10 }}>
+          <TouchableOpacity onPress={() => navigate(0)} style={{ paddingVertical: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="home-outline" size={18} color={theme === 'dark' ? '#fff' : '#0f172a'} />
               <Text style={{ color: theme === 'dark' ? '#fff' : '#0f172a', marginLeft: 10 }}>Strona główna</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { close(); router.push('/schedule'); }} style={{ paddingVertical: 10 }}>
+          <TouchableOpacity onPress={() => navigate(1)} style={{ paddingVertical: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="calendar-outline" size={18} color={theme === 'dark' ? '#fff' : '#0f172a'} />
               <Text style={{ color: theme === 'dark' ? '#fff' : '#0f172a', marginLeft: 10 }}>Plan lekcji</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { close(); router.push('/grades'); }} style={{ paddingVertical: 10 }}>
+          <TouchableOpacity onPress={() => navigate(2)} style={{ paddingVertical: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="ribbon-outline" size={18} color={theme === 'dark' ? '#fff' : '#0f172a'} />
               <Text style={{ color: theme === 'dark' ? '#fff' : '#0f172a', marginLeft: 10 }}>Oceny</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { close(); router.push('/attendance'); }} style={{ paddingVertical: 10 }}>
+          <TouchableOpacity onPress={() => navigate(3)} style={{ paddingVertical: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="stats-chart-outline" size={18} color={theme === 'dark' ? '#fff' : '#0f172a'} />
               <Text style={{ color: theme === 'dark' ? '#fff' : '#0f172a', marginLeft: 10 }}>Frekwencja</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { close(); router.push('/messages'); }} style={{ paddingVertical: 10 }}>
+          <TouchableOpacity onPress={() => navigate(4)} style={{ paddingVertical: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="chatbubbles-outline" size={18} color={theme === 'dark' ? '#fff' : '#0f172a'} />
               <Text style={{ color: theme === 'dark' ? '#fff' : '#0f172a', marginLeft: 10 }}>Wiadomości</Text>
