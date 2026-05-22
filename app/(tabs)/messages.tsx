@@ -2,9 +2,9 @@ import { useRouter } from "expo-router";
 import * as React from "react";
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { getCurrentDjangoUserId, getDjangoIdFromToken } from "../api/auth";
-import { convertToDisplayMessage, getInboxMessages, getSentMessages, Message, updateMessage } from "../api/messages";
+import { getAllMessages, getInboxMessages, getSentMessages, MessageRecord } from "../api/messages";
 import { findDjangoUserIdByUsername } from "../api/users";
-import { Card, SearchField, SectionHeader, SegmentedControl, StatCard, PrimaryButton, EmptyPlaceholder } from "../components/editorial/MobileBlocks";
+import { Card, SearchField, SectionHeader, StatCard, PrimaryButton, EmptyPlaceholder } from "../components/editorial/MobileBlocks";
 import Header from "../components/Header";
 import ErrorState from "../components/ErrorState";
 import { SkeletonCard } from "../components/ui/SkeletonItem";
@@ -13,20 +13,65 @@ import { useUser } from "../context/UserContext";
 import { R, S, T, getEditorialPalette } from "../theme/editorial";
 import { useTheme } from "../theme/ThemeContext";
 
+type ConversationItem = {
+    partnerId: number;
+    partnerName: string;
+    lastMessage: MessageRecord;
+    unreadCount: number;
+    isLastFromMe: boolean;
+};
+
+function groupByConversation(messages: MessageRecord[], myId: number): ConversationItem[] {
+    const map = new Map<number, ConversationItem>();
+    for (const msg of messages) {
+        const isFromMe = msg.nadawca_id === myId;
+        const partnerId = isFromMe ? msg.odbiorca_id : msg.nadawca_id;
+        const partnerName = isFromMe
+            ? (msg.odbiorca_username ?? `Użytkownik ${partnerId}`)
+            : (msg.nadawca_username ?? `Użytkownik ${partnerId}`);
+        const existing = map.get(partnerId);
+        const isNewer = !existing || new Date(msg.data_wyslania) > new Date(existing.lastMessage.data_wyslania);
+        if (!existing) {
+            map.set(partnerId, { partnerId, partnerName, lastMessage: msg, unreadCount: (!isFromMe && !msg.przeczytana) ? 1 : 0, isLastFromMe: isFromMe });
+        } else {
+            if (isNewer) { existing.lastMessage = msg; existing.isLastFromMe = isFromMe; }
+            if (!isFromMe && !msg.przeczytana) existing.unreadCount += 1;
+        }
+    }
+    return Array.from(map.values()).sort(
+        (a, b) => new Date(b.lastMessage.data_wyslania).getTime() - new Date(a.lastMessage.data_wyslania).getTime()
+    );
+}
+
+function formatTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+        return date.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+    } else if (diffDays === 1) {
+        return "Wczoraj";
+    } else if (diffDays < 7) {
+        return `${diffDays} dni temu`;
+    } else {
+        return date.toLocaleDateString("pl-PL");
+    }
+}
+
 export default function Messages() {
     const { user } = useUser();
     const router = useRouter();
     const { theme } = useTheme();
     const palette = getEditorialPalette(theme);
     const [search, setSearch] = React.useState("");
-    const [messages, setMessages] = React.useState<Message[]>([]);
-    const [tab, setTab] = React.useState<"inbox" | "sent">("inbox");
-    const [readFilter, setReadFilter] = React.useState<"all" | "read" | "unread">("all");
+    const [conversations, setConversations] = React.useState<ConversationItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [refreshing, setRefreshing] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const [myId, setMyId] = React.useState<number>(0);
 
-    const fetchMessages = React.useCallback(async () => {
+    const fetchConversations = React.useCallback(async () => {
         if (!user) return;
         setLoading(true);
         setError(null);
@@ -44,81 +89,84 @@ export default function Messages() {
                         attemptsUserId = Number(resolved);
                     }
                 }
-            } catch (error) {
-                console.warn("[messages] resolving Django user id failed", error);
+            } catch (err) {
+                console.warn("[messages] resolving Django user id failed", err);
             }
 
             if ((!attemptsUserId || attemptsUserId <= 0) && user.username) {
                 try {
                     const mapped = await findDjangoUserIdByUsername(user.username);
                     if (mapped) attemptsUserId = Number(mapped);
-                } catch (error) {
-                    console.warn("[messages] username fallback failed", error);
+                } catch (err) {
+                    console.warn("[messages] username fallback failed", err);
                 }
             }
 
             if (!attemptsUserId || attemptsUserId <= 0) {
-                setMessages([]);
+                setConversations([]);
                 return;
             }
 
-            const items =
-                tab === "inbox"
-                    ? await getInboxMessages(attemptsUserId)
-                    : await getSentMessages(attemptsUserId);
+            setMyId(attemptsUserId);
 
-            const displayMessages = items.map((record) =>
-                convertToDisplayMessage(record, attemptsUserId)
-            );
-            setMessages(displayMessages);
-        } catch (error) {
-            console.error("[messages] Failed to fetch messages:", error);
-            setMessages([]);
+            let allMessages: MessageRecord[] = [];
+            try {
+                allMessages = await getAllMessages();
+                // If getAllMessages returns empty, fall back to inbox+sent
+                if (!allMessages || allMessages.length === 0) {
+                    const [inbox, sent] = await Promise.all([
+                        getInboxMessages(attemptsUserId),
+                        getSentMessages(attemptsUserId),
+                    ]);
+                    const seen = new Set<number>();
+                    for (const m of [...inbox, ...sent]) {
+                        if (!seen.has(m.id)) { seen.add(m.id); allMessages.push(m); }
+                    }
+                }
+            } catch {
+                const [inbox, sent] = await Promise.all([
+                    getInboxMessages(attemptsUserId),
+                    getSentMessages(attemptsUserId),
+                ]);
+                const seen = new Set<number>();
+                for (const m of [...inbox, ...sent]) {
+                    if (!seen.has(m.id)) { seen.add(m.id); allMessages.push(m); }
+                }
+            }
+
+            const grouped = groupByConversation(allMessages, attemptsUserId);
+            setConversations(grouped);
+        } catch (err) {
+            console.error("[messages] Failed to fetch conversations:", err);
+            setConversations([]);
             setError("Nie udało się pobrać wiadomości. Sprawdź połączenie i spróbuj ponownie.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [tab, user]);
+    }, [user]);
 
     React.useEffect(() => {
         if (user?.username || user?.id) {
-            void fetchMessages();
+            void fetchConversations();
         }
-    }, [fetchMessages, user?.id, user?.username]);
+    }, [fetchConversations, user?.id, user?.username]);
 
-    const filteredMessages = React.useMemo(() => {
-        const bySearch = messages.filter(
-            (message) =>
-                message.sender.toLowerCase().includes(search.toLowerCase()) ||
-                message.subject.toLowerCase().includes(search.toLowerCase()) ||
-                message.preview.toLowerCase().includes(search.toLowerCase())
+    const filteredConversations = React.useMemo(() => {
+        if (!search) return conversations;
+        const q = search.toLowerCase();
+        return conversations.filter(
+            (c) =>
+                c.partnerName.toLowerCase().includes(q) ||
+                c.lastMessage.tresc.toLowerCase().includes(q) ||
+                c.lastMessage.temat.toLowerCase().includes(q)
         );
+    }, [conversations, search]);
 
-        if (tab !== "inbox") return bySearch;
-        if (readFilter === "read") return bySearch.filter((message) => !message.unread);
-        if (readFilter === "unread") return bySearch.filter((message) => message.unread);
-        return bySearch;
-    }, [messages, readFilter, search, tab]);
-
-    const unreadCount = React.useMemo(
-        () => messages.filter((message) => message.unread).length,
-        [messages]
+    const totalUnread = React.useMemo(
+        () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
+        [conversations]
     );
-
-    const openMessage = async (messageId: number) => {
-        const message = messages.find((item) => item.id === messageId);
-        if (message && message.unread && message.raw) {
-            await updateMessage(messageId, { przeczytana: true });
-            setMessages((prev) =>
-                prev.map((item) =>
-                    item.id === messageId ? { ...item, unread: false } : item
-                )
-            );
-        }
-        const senderParam = message ? encodeURIComponent(message.sender) : "";
-        router.push(`/wiadomosci/${messageId}?sender=${senderParam}`);
-    };
 
     return (
         <UserGate>
@@ -126,9 +174,9 @@ export default function Messages() {
                 <Header
                     title="Wiadomosci"
                     subtitle={
-                        unreadCount > 0
-                            ? `${unreadCount} nieprzeczytanych wiadomosci`
-                            : "Skrzynka odbiorcza"
+                        totalUnread > 0
+                            ? `${totalUnread} nieprzeczytanych wiadomosci`
+                            : "Rozmowy"
                     }
                 />
                 <ScrollView
@@ -141,19 +189,18 @@ export default function Messages() {
                             refreshing={refreshing}
                             onRefresh={() => {
                                 setRefreshing(true);
-                                void fetchMessages();
+                                void fetchConversations();
                             }}
                             tintColor={palette.primary}
                         />
                     }
                 >
-
                     <View style={styles.body}>
                         <View style={styles.statRow}>
                             <View style={styles.statCell}>
                                 <StatCard
                                     eyebrow="Nieprzeczytane"
-                                    value={String(unreadCount).padStart(2, "0")}
+                                    value={String(totalUnread).padStart(2, "0")}
                                     caption="Liczba wiadomosci oczekujacych na przeczytanie."
                                     icon="mail-unread-outline"
                                     tone="primary"
@@ -161,45 +208,20 @@ export default function Messages() {
                             </View>
                             <View style={styles.statCell}>
                                 <StatCard
-                                    eyebrow={tab === "inbox" ? "Skrzynka" : "Wyslane"}
-                                    value={String(filteredMessages.length).padStart(2, "0")}
-                                    caption="Widok dopasowany do aktywnego filtra i wyszukiwania."
-                                    icon="albums-outline"
+                                    eyebrow="Rozmowy"
+                                    value={String(filteredConversations.length).padStart(2, "0")}
+                                    caption="Liczba aktywnych rozmow."
+                                    icon="chatbubbles-outline"
                                     tone="neutral"
                                 />
                             </View>
                         </View>
 
                         <View style={styles.controlRow}>
-                            <SegmentedControl
-                                value={tab}
-                                onChange={setTab}
-                                options={[
-                                    { key: "inbox", label: "Odebrane", count: messages.length },
-                                    { key: "sent", label: "Wyslane", count: messages.length },
-                                ]}
-                            />
-                        </View>
-
-                        {tab === "inbox" ? (
-                            <View style={styles.controlRow}>
-                                <SegmentedControl
-                                    value={readFilter}
-                                    onChange={setReadFilter}
-                                    options={[
-                                        { key: "all", label: "Wszystkie" },
-                                        { key: "unread", label: "Nieodczytane" },
-                                        { key: "read", label: "Odczytane" },
-                                    ]}
-                                />
-                            </View>
-                        ) : null}
-
-                        <View style={styles.controlRow}>
                             <SearchField
                                 value={search}
                                 onChangeText={setSearch}
-                                placeholder="Szukaj wiadomosci..."
+                                placeholder="Szukaj rozmow..."
                             />
                         </View>
 
@@ -215,8 +237,8 @@ export default function Messages() {
                         <View style={styles.listSection}>
                             <SectionHeader
                                 eyebrow="Skrzynka"
-                                title={tab === "inbox" ? "Odebrane" : "Wyslane"}
-                                meta={String(filteredMessages.length)}
+                                title="Rozmowy"
+                                meta={String(filteredConversations.length)}
                             />
 
                             {loading ? (
@@ -226,112 +248,104 @@ export default function Messages() {
                                     <SkeletonCard />
                                 </View>
                             ) : error ? (
-                                <ErrorState message={error} onRetry={() => void fetchMessages()} />
-                            ) : filteredMessages.length === 0 ? (
+                                <ErrorState message={error} onRetry={() => void fetchConversations()} />
+                            ) : filteredConversations.length === 0 ? (
                                 <EmptyPlaceholder
-                                    title={
-                                        search
-                                            ? "Brak wynikow"
-                                            : tab === "inbox"
-                                              ? "Brak odebranych wiadomosci"
-                                              : "Brak wyslanych wiadomosci"
-                                    }
+                                    title={search ? "Brak wynikow" : "Brak rozmow"}
                                     subtitle="Nowe rozmowy pojawia sie tutaj po synchronizacji."
-                                    icon="mail-outline"
+                                    icon="chatbubbles-outline"
                                 />
                             ) : (
                                 <FlatList
-                                    data={filteredMessages}
-                                    keyExtractor={(item) => String(item.id)}
+                                    data={filteredConversations}
+                                    keyExtractor={(item) => String(item.partnerId)}
                                     scrollEnabled={false}
                                     ItemSeparatorComponent={() => <View style={styles.separator} />}
-                                    renderItem={({ item: message }) => (
-                                        <TouchableOpacity
-                                            onPress={() => void openMessage(message.id)}
-                                            activeOpacity={0.88}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={`Wiadomosc od ${message.sender}: ${message.subject}`}
-                                        >
-                                            <Card>
-                                                <View style={styles.messageCard}>
-                                                    <View
-                                                        style={[
-                                                            styles.avatarWrap,
-                                                            {
-                                                                backgroundColor: message.unread
-                                                                    ? palette.primaryFixed
-                                                                    : palette.surfaceMid,
-                                                            },
-                                                        ]}
-                                                    >
-                                                        <Text
-                                                            style={[
-                                                                T.title,
-                                                                {
-                                                                    color: message.unread
-                                                                        ? palette.infoText
-                                                                        : palette.textMuted,
-                                                                },
-                                                            ]}
-                                                        >
-                                                            {message.avatar}
-                                                        </Text>
-                                                    </View>
-
-                                                    <View style={styles.messageBody}>
-                                                        <Text
-                                                            style={[T.bodyMedium, { color: palette.text }]}
-                                                            numberOfLines={1}
-                                                        >
-                                                            {message.sender}
-                                                        </Text>
-                                                        <Text
-                                                            style={[T.label, { color: palette.textMuted, marginTop: 2 }]}
-                                                            numberOfLines={1}
-                                                        >
-                                                            {message.subject}
-                                                        </Text>
-                                                        <Text
-                                                            style={[T.label, { color: palette.textSoft, marginTop: 6 }]}
-                                                            numberOfLines={2}
-                                                        >
-                                                            {message.preview}
-                                                        </Text>
-                                                    </View>
-
-                                                    <View style={styles.messageMeta}>
-                                                        <Text style={[T.meta, { color: palette.textSoft }]}>
-                                                            {message.time}
-                                                        </Text>
+                                    renderItem={({ item }) => {
+                                        const avatarLetter = item.partnerName[0]?.toUpperCase() ?? "?";
+                                        const hasUnread = item.unreadCount > 0;
+                                        return (
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    router.push(
+                                                        `/wiadomosci/chat/${item.partnerId}?name=${encodeURIComponent(item.partnerName)}`
+                                                    )
+                                                }
+                                                activeOpacity={0.88}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Rozmowa z ${item.partnerName}`}
+                                            >
+                                                <Card>
+                                                    <View style={styles.messageCard}>
                                                         <View
                                                             style={[
-                                                                styles.statusPill,
+                                                                styles.avatarWrap,
                                                                 {
-                                                                    backgroundColor: message.unread
+                                                                    backgroundColor: hasUnread
                                                                         ? palette.primaryFixed
                                                                         : palette.surfaceMid,
-                                                                    marginTop: S[2],
                                                                 },
                                                             ]}
                                                         >
                                                             <Text
                                                                 style={[
-                                                                    T.meta,
+                                                                    T.title,
                                                                     {
-                                                                        color: message.unread
+                                                                        color: hasUnread
                                                                             ? palette.infoText
-                                                                            : palette.textSoft,
+                                                                            : palette.textMuted,
                                                                     },
                                                                 ]}
                                                             >
-                                                                {message.unread ? "Nowa" : "Odczytana"}
+                                                                {avatarLetter}
                                                             </Text>
                                                         </View>
+
+                                                        <View style={styles.messageBody}>
+                                                            <Text
+                                                                style={[T.bodyMedium, { color: palette.text }]}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {item.partnerName}
+                                                            </Text>
+                                                            <Text
+                                                                style={[
+                                                                    T.label,
+                                                                    {
+                                                                        color: hasUnread ? palette.text : palette.textSoft,
+                                                                        marginTop: 4,
+                                                                        fontWeight: hasUnread ? "600" : "400",
+                                                                    },
+                                                                ]}
+                                                                numberOfLines={2}
+                                                            >
+                                                                {item.isLastFromMe ? "Ty: " : ""}
+                                                                {item.lastMessage.tresc.slice(0, 80)}
+                                                            </Text>
+                                                        </View>
+
+                                                        <View style={styles.messageMeta}>
+                                                            <Text style={[T.meta, { color: palette.textSoft }]}>
+                                                                {formatTime(item.lastMessage.data_wyslania)}
+                                                            </Text>
+                                                            {hasUnread ? (
+                                                                <View
+                                                                    style={[
+                                                                        styles.unreadBadge,
+                                                                        { backgroundColor: palette.primary, marginTop: S[2] },
+                                                                    ]}
+                                                                >
+                                                                    <Text style={[T.meta, { color: palette.onPrimary }]}>
+                                                                        {item.unreadCount}
+                                                                    </Text>
+                                                                </View>
+                                                            ) : null}
+                                                        </View>
                                                     </View>
-                                                </View>
-                                            </Card>
-                                        </TouchableOpacity>
-                                    )}
+                                                </Card>
+                                            </TouchableOpacity>
+                                        );
+                                    }}
                                 />
                             )}
                         </View>
@@ -394,9 +408,12 @@ const styles = StyleSheet.create({
     messageMeta: {
         alignItems: "flex-end",
     },
-    statusPill: {
+    unreadBadge: {
         borderRadius: R.full,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        minWidth: 22,
+        height: 22,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 6,
     },
 });
