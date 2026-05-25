@@ -173,7 +173,9 @@ export const getParentGrades = async (studentId: number): Promise<ParentSubjectG
 
 const buildAttendanceFromRaw = async (studentId: number): Promise<ParentAttendanceEntry[]> => {
   const base = getApiBaseUrl();
-  const [attendRes, statusRes] = await Promise.all([
+  // Try both param names — some backends use "uczen", others "uczen_id"
+  const [attendRes, attendRes2, statusRes] = await Promise.all([
+    authenticatedFetch(`${base}/api/frekwencja/?uczen=${studentId}`, { headers: adminH() }),
     authenticatedFetch(`${base}/api/frekwencja/?uczen_id=${studentId}`, { headers: adminH() }),
     authenticatedFetch(`${base}/api/statusy/`, { headers: adminH() }),
   ]);
@@ -182,23 +184,52 @@ const buildAttendanceFromRaw = async (studentId: number): Promise<ParentAttendan
     const d = await r.json().catch(() => []);
     return Array.isArray(d) ? d : (d.results ?? []);
   };
-  const [entries, statuses] = await Promise.all([toList(attendRes), toList(statusRes)]);
+  const [list1, list2, statuses] = await Promise.all([toList(attendRes), toList(attendRes2), toList(statusRes)]);
+  const entries = list1.length > 0 ? list1 : list2;
   const statusMap = new Map<number, string>(statuses.map((s: any) => [Number(s.id), String(s.Wartosc ?? s.wartosc ?? s.name ?? s.nazwa ?? s.id)]));
-  return entries.map((e: any) => ({
-    id: e.id as number,
-    data: (e.Data ?? e.data ?? "") as string,
-    status: statusMap.get(Number(e.status)) ?? null,
+  return entries
+    .filter((e: any) => {
+      const uczenRaw = e?.uczen_id ?? e?.uczen?.id ?? e?.uczen?.pk ?? (typeof e?.uczen === "number" ? e?.uczen : null);
+      if (uczenRaw == null) return true;
+      return Number(uczenRaw) === studentId;
+    })
+    .map((e: any) => ({
+      id: e.id as number,
+      data: (e.Data ?? e.data ?? "") as string,
+      status: statusMap.get(Number(e.status)) ?? null,
+      godzina_lekcyjna: (e.godzina_lekcyjna ?? null) as number | null,
+    }));
+};
+
+const normalizeAttendanceEntries = async (
+  list: any[],
+  base: string
+): Promise<ParentAttendanceEntry[]> => {
+  const statusRes = await authenticatedFetch(`${base}/api/statusy/`, { headers: adminH() });
+  const statusRaw = statusRes.ok ? await statusRes.json().catch(() => []) : [];
+  const statusList = Array.isArray(statusRaw) ? statusRaw : (statusRaw.results ?? []);
+  const statusMap = new Map<number, string>(
+    statusList.map((s: any) => [Number(s.id), String(s.Wartosc ?? s.wartosc ?? s.name ?? s.id)])
+  );
+  return list.map((e: any) => ({
+    id: Number(e.id),
+    // backend returns "Data" (capital D) for the date field
+    data: String(e.Data ?? e.data ?? ""),
+    status: typeof e.status === "string"
+      ? e.status
+      : (statusMap.get(Number(e.status)) ?? null),
     godzina_lekcyjna: (e.godzina_lekcyjna ?? null) as number | null,
   }));
 };
 
 export const getParentAttendance = async (studentId: number): Promise<ParentAttendanceEntry[]> => {
   try {
+    const base = getApiBaseUrl();
     const res = await authenticatedFetch(
-      `${getApiBaseUrl()}/api/parent/attendance/?student_id=${studentId}`
+      `${base}/api/parent/attendance/?student_id=${studentId}`
     );
-    const list = (await jsonList(res)) as ParentAttendanceEntry[];
-    if (list.length > 0) return list;
+    const list = await jsonList(res);
+    if (list.length > 0) return await normalizeAttendanceEntries(list, base);
     return await buildAttendanceFromRaw(studentId);
   } catch {
     return [];

@@ -1,366 +1,314 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { createMessage, getInboxMessages, getSentMessages, MessageRecord } from "../../api/messages";
+import {
+  createMessage,
+  getInboxMessages,
+  getSentMessages,
+  MessageRecord,
+  updateMessage,
+} from "../../api/messages";
 import { useUser } from "../../context/UserContext";
-import { R, S, T, cardShadow, getEditorialPalette } from "../../theme/editorial";
-import { useTheme } from "../../theme/ThemeContext";
 import { useConversationSocket } from "../../hooks/useConversationSocket";
+import { R, S, T, getEditorialPalette } from "../../theme/editorial";
+import { useTheme } from "../../theme/ThemeContext";
 
 function formatBubbleTime(dateStr: string): string {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleString("pl-PL", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
 }
 
 export default function ChatScreen() {
-    const { partnerId, name } = useLocalSearchParams<{ partnerId: string; name?: string }>();
-    const { user } = useUser();
-    const router = useRouter();
-    const { theme } = useTheme();
-    const palette = getEditorialPalette(theme);
+  const { partnerId, name, subject: subjectParam } = useLocalSearchParams<{
+    partnerId: string; name?: string; subject?: string;
+  }>();
+  const router = useRouter();
+  const { user } = useUser();
+  const { theme } = useTheme();
+  const palette = getEditorialPalette(theme);
 
-    const myId = user ? Number((user as any).serverId ?? user.id) : 0;
-    const partnerIdNum = Number(partnerId);
-    const partnerName = name ?? "Rozmowa";
+  const myId = user?.id ?? null;
+  const partnerIdNum = partnerId ? Number(partnerId) : null;
+  const partnerName = name ? decodeURIComponent(name) : `Użytkownik ${partnerId}`;
+  const subject = subjectParam ? decodeURIComponent(subjectParam) : "";
 
-    const [messages, setMessages] = React.useState<MessageRecord[]>([]);
-    const [loading, setLoading] = React.useState(true);
-    const [text, setText] = React.useState("");
-    const [sending, setSending] = React.useState(false);
-    const flatListRef = React.useRef<FlatList<MessageRecord>>(null);
+  const [messages, setMessages] = useState<MessageRecord[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [sending, setSending] = useState(false);
+  const flatListRef = useRef<FlatList<MessageRecord>>(null);
 
-    const { lastMessage, sendMessage, connected } = useConversationSocket(
-        myId > 0 ? myId : null,
-        partnerIdNum > 0 ? partnerIdNum : null
-    );
+  const { lastMessage, sendMessage } = useConversationSocket(myId, partnerIdNum);
 
-    // Load initial messages
-    React.useEffect(() => {
-        if (!myId || !partnerIdNum) return;
-        setLoading(true);
-        Promise.all([getInboxMessages(myId), getSentMessages(myId)])
-            .then(([inbox, sent]) => {
-                const seen = new Set<number>();
-                const combined: MessageRecord[] = [];
-                for (const m of [...inbox, ...sent]) {
-                    if (seen.has(m.id)) continue;
-                    seen.add(m.id);
-                    if (m.nadawca_id === partnerIdNum || m.odbiorca_id === partnerIdNum) {
-                        combined.push(m);
-                    }
-                }
-                combined.sort(
-                    (a, b) =>
-                        new Date(a.data_wyslania).getTime() - new Date(b.data_wyslania).getTime()
-                );
-                setMessages(combined);
-            })
-            .catch((err) => {
-                console.error("[chat] Failed to load messages", err);
-            })
-            .finally(() => setLoading(false));
-    }, [myId, partnerIdNum]);
+  const loadMessages = useCallback(async () => {
+    if (!myId || !partnerIdNum) return;
+    const [inboxData, sentData] = await Promise.all([
+      getInboxMessages(myId),
+      getSentMessages(myId),
+    ]);
+    const seen = new Set<number>();
+    const all: MessageRecord[] = [];
+    for (const msg of [...inboxData, ...sentData]) {
+      if (!seen.has(msg.id)) { seen.add(msg.id); all.push(msg); }
+    }
+    const filtered = all
+      .filter((m) => m.nadawca_id === partnerIdNum || m.odbiorca_id === partnerIdNum)
+      .sort((a, b) => new Date(a.data_wyslania).getTime() - new Date(b.data_wyslania).getTime());
+    for (const m of filtered) {
+      if (m.nadawca_id === partnerIdNum && !m.przeczytana) {
+        updateMessage(m.id, { przeczytana: true }).catch(() => {});
+      }
+    }
+    setMessages(filtered);
+  }, [myId, partnerIdNum]);
 
-    // Append incoming WS messages
-    React.useEffect(() => {
-        if (!lastMessage) return;
-        const wsMsg: MessageRecord = {
-            id: Date.now(),
-            nadawca_id: lastMessage.sender_id,
-            odbiorca_id: myId,
-            temat: "Chat",
-            tresc: lastMessage.message,
-            data_wyslania: lastMessage.timestamp ?? new Date().toISOString(),
-            przeczytana: false,
-        };
-        setMessages((prev) => {
-            // Avoid duplicate if WS echoes back own message
-            if (wsMsg.nadawca_id === myId) return prev;
-            return [...prev, wsMsg];
-        });
-    }, [lastMessage, myId]);
+  useEffect(() => { void loadMessages(); }, [loadMessages]);
 
-    const handleSend = async () => {
-        const trimmed = text.trim();
-        if (!trimmed || !myId || !partnerIdNum) return;
-        setSending(true);
-        setText("");
-        const optimistic: MessageRecord = {
-            id: Date.now(),
-            nadawca_id: myId,
-            odbiorca_id: partnerIdNum,
-            temat: "Chat",
-            tresc: trimmed,
-            data_wyslania: new Date().toISOString(),
-            przeczytana: false,
-        };
-        setMessages((prev) => [...prev, optimistic]);
-        try {
-            const created = await createMessage({
-                nadawca_id: myId,
-                odbiorca_id: partnerIdNum,
-                temat: "Chat",
-                tresc: trimmed,
-            });
-            if (created) {
-                // Replace optimistic entry with server record
-                setMessages((prev) =>
-                    prev.map((m) => (m.id === optimistic.id ? created : m))
-                );
-            }
-            sendMessage(trimmed);
-        } catch (err) {
-            console.error("[chat] Send failed", err);
-        } finally {
-            setSending(false);
-        }
+  useEffect(() => {
+    if (!lastMessage || !myId || !partnerIdNum) return;
+    if (lastMessage.sender_id === myId) return;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        nadawca_id: lastMessage.sender_id,
+        nadawca_username: partnerName,
+        odbiorca_id: myId,
+        odbiorca_username: user?.name,
+        temat: subject || "Chat",
+        tresc: lastMessage.message,
+        data_wyslania: lastMessage.timestamp ?? new Date().toISOString(),
+        przeczytana: false,
+      },
+    ]);
+  }, [lastMessage, myId, partnerIdNum, partnerName, subject, user?.name]);
+
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if (!text || !myId || !partnerIdNum || sending) return;
+    setInputText("");
+    setSending(true);
+    const optimistic: MessageRecord = {
+      id: Date.now(),
+      nadawca_id: myId,
+      nadawca_username: user?.name,
+      odbiorca_id: partnerIdNum,
+      odbiorca_username: partnerName,
+      temat: subject || "Chat",
+      tresc: text,
+      data_wyslania: new Date().toISOString(),
+      przeczytana: true,
     };
+    setMessages((prev) => [...prev, optimistic]);
+    sendMessage(text);
+    await createMessage({
+      nadawca_id: myId,
+      odbiorca_id: partnerIdNum,
+      temat: subject || "Chat",
+      tresc: text,
+    });
+    setSending(false);
+    flatListRef.current?.scrollToEnd({ animated: true });
+  };
+
+  const avatarChar = partnerName ? partnerName[0].toUpperCase() : "?";
+
+  const renderMessage = ({ item, index }: { item: MessageRecord; index: number }) => {
+    const isMe = item.nadawca_id === myId;
+    const showSubjectChip = index === 0 && item.temat;
 
     return (
-        <View style={[styles.root, { backgroundColor: palette.background }]}>
-            {/* Top bar */}
-            <View style={[styles.topBar, { backgroundColor: palette.surface, ...cardShadow(theme) }]}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={[styles.backBtn, { backgroundColor: palette.surfaceMid }]}
-                    accessibilityLabel="Wróć"
-                >
-                    <Ionicons name="arrow-back" size={22} color={palette.primary} />
-                </TouchableOpacity>
-                <View style={styles.topBarTitle}>
-                    <Text style={[T.bodyMedium, { color: palette.text }]} numberOfLines={1}>
-                        {partnerName}
-                    </Text>
-                    <View style={styles.wsIndicatorRow}>
-                        <View
-                            style={[
-                                styles.wsDot,
-                                { backgroundColor: connected ? palette.success : palette.textSoft },
-                            ]}
-                        />
-                        <Text style={[T.meta, { color: palette.textSoft, marginLeft: 4 }]}>
-                            {connected ? "Połączono" : "Offline"}
-                        </Text>
-                    </View>
-                </View>
+      <>
+        {showSubjectChip ? (
+          <View style={styles.subjectChipRow}>
+            <View style={[styles.subjectChip, { backgroundColor: palette.surfaceMid }]}>
+              <Text style={[T.meta, { color: palette.textSoft, fontWeight: "600" }]}>
+                {item.temat}
+              </Text>
             </View>
+          </View>
+        ) : null}
 
-            {/* Messages */}
-            {loading ? (
-                <View style={styles.loadingWrap}>
-                    <ActivityIndicator size="large" color={palette.primary} />
-                </View>
-            ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    keyExtractor={(item, idx) => `${item.id}-${idx}`}
-                    inverted
-                    keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={styles.listContent}
-                    renderItem={({ item }) => {
-                        const isOwn = item.nadawca_id === myId;
-                        return (
-                            <View
-                                style={[
-                                    styles.bubbleRow,
-                                    isOwn ? styles.bubbleRowOwn : styles.bubbleRowPartner,
-                                ]}
-                            >
-                                <View
-                                    style={[
-                                        styles.bubble,
-                                        {
-                                            backgroundColor: isOwn
-                                                ? palette.primary
-                                                : palette.surface,
-                                            borderRadius: R.lg,
-                                        },
-                                        !isOwn && (cardShadow(theme) as object),
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            T.body,
-                                            { color: isOwn ? palette.onPrimary : palette.text },
-                                        ]}
-                                    >
-                                        {item.tresc}
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            T.meta,
-                                            {
-                                                color: isOwn
-                                                    ? "rgba(255,255,255,0.6)"
-                                                    : palette.textSoft,
-                                                marginTop: 4,
-                                                alignSelf: "flex-end",
-                                            },
-                                        ]}
-                                    >
-                                        {formatBubbleTime(item.data_wyslania)}
-                                    </Text>
-                                </View>
-                            </View>
-                        );
-                    }}
-                />
-            )}
-
-            {/* Input bar */}
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={0}
+        <View style={[styles.bubbleWrapper, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
+          {!isMe && (
+            <View style={[styles.avatarMini, { backgroundColor: palette.primaryFixed }]}>
+              <Text style={[T.meta, { color: palette.infoText, fontWeight: "700" }]}>
+                {avatarChar}
+              </Text>
+            </View>
+          )}
+          <View style={styles.bubbleColumn}>
+            <View
+              style={[
+                styles.bubble,
+                {
+                  backgroundColor: isMe ? palette.primary : palette.surface,
+                  borderBottomRightRadius: isMe ? R.xs : R.lg,
+                  borderBottomLeftRadius: isMe ? R.lg : R.xs,
+                },
+              ]}
             >
-                <View
-                    style={[
-                        styles.inputBar,
-                        {
-                            backgroundColor: palette.surface,
-                            borderTopColor: palette.outlineVariant,
-                        },
-                    ]}
-                >
-                    <TextInput
-                        style={[
-                            styles.textInput,
-                            {
-                                backgroundColor: palette.surfaceLow,
-                                color: palette.text,
-                                borderColor: palette.outlineVariant,
-                                borderRadius: R.lg,
-                            },
-                        ]}
-                        value={text}
-                        onChangeText={setText}
-                        placeholder="Napisz wiadomość..."
-                        placeholderTextColor={palette.textSoft}
-                        multiline
-                        maxLength={2000}
-                        returnKeyType="default"
-                    />
-                    <TouchableOpacity
-                        onPress={() => void handleSend()}
-                        disabled={!text.trim() || sending}
-                        style={[
-                            styles.sendBtn,
-                            {
-                                backgroundColor:
-                                    text.trim() && !sending ? palette.primary : palette.surfaceMid,
-                            },
-                        ]}
-                        accessibilityLabel="Wyślij"
-                    >
-                        {sending ? (
-                            <ActivityIndicator size="small" color={palette.onPrimary} />
-                        ) : (
-                            <Ionicons
-                                name="send"
-                                size={20}
-                                color={text.trim() ? palette.onPrimary : palette.textMuted}
-                            />
-                        )}
-                    </TouchableOpacity>
-                </View>
-            </KeyboardAvoidingView>
+              <Text style={[T.body, { color: isMe ? palette.onPrimary : palette.text }]}>
+                {item.tresc}
+              </Text>
+            </View>
+            <Text
+              style={[
+                T.meta,
+                styles.bubbleTime,
+                { color: palette.textSoft },
+                isMe ? { textAlign: "right" } : { textAlign: "left" },
+              ]}
+            >
+              {formatBubbleTime(item.data_wyslania)}
+            </Text>
+          </View>
         </View>
+      </>
     );
+  };
+
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: palette.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.outline }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button">
+          <Ionicons name="arrow-back" size={24} color={palette.text} />
+        </TouchableOpacity>
+        <View style={[styles.avatarSmall, { backgroundColor: palette.primary }]}>
+          <Text style={[T.title, { color: palette.onPrimary }]}>{avatarChar}</Text>
+        </View>
+        <View style={styles.headerTitle}>
+          <Text style={[T.bodyMedium, { color: palette.text, fontWeight: "700" }]} numberOfLines={1}>
+            {partnerName}
+          </Text>
+          {subject ? (
+            <Text style={[T.meta, { color: palette.primary, fontWeight: "500" }]} numberOfLines={1}>
+              {subject}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item, idx) => `${item.id}-${idx}`}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        />
+
+        {/* Reply input */}
+        <View style={[styles.inputBar, { backgroundColor: palette.surface, borderTopColor: palette.outline }]}>
+          <TextInput
+            style={[styles.textInput, { backgroundColor: palette.inputSurface, color: palette.text }]}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Napisz odpowiedź..."
+            placeholderTextColor={palette.textSoft}
+            multiline
+            maxLength={1000}
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={!inputText.trim() || sending}
+            style={[
+              styles.sendBtn,
+              { backgroundColor: palette.primary, opacity: !inputText.trim() || sending ? 0.4 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Wyślij"
+          >
+            <Ionicons name="send" size={18} color={palette.onPrimary} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    root: {
-        flex: 1,
-    },
-    topBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: S[4],
-        paddingTop: S[3],
-        paddingBottom: S[3],
-        gap: S[3],
-        zIndex: 10,
-    },
-    backBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: R.full,
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-    },
-    topBarTitle: {
-        flex: 1,
-    },
-    wsIndicatorRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginTop: 2,
-    },
-    wsDot: {
-        width: 8,
-        height: 8,
-        borderRadius: R.full,
-    },
-    loadingWrap: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    listContent: {
-        paddingHorizontal: S[4],
-        paddingVertical: S[3],
-    },
-    bubbleRow: {
-        marginVertical: S[1],
-        flexDirection: "row",
-    },
-    bubbleRowOwn: {
-        justifyContent: "flex-end",
-    },
-    bubbleRowPartner: {
-        justifyContent: "flex-start",
-    },
-    bubble: {
-        maxWidth: "75%",
-        padding: S[3],
-    },
-    inputBar: {
-        flexDirection: "row",
-        alignItems: "flex-end",
-        paddingHorizontal: S[4],
-        paddingVertical: S[3],
-        borderTopWidth: 1,
-        gap: S[2],
-    },
-    textInput: {
-        flex: 1,
-        minHeight: 44,
-        maxHeight: 120,
-        paddingHorizontal: S[3],
-        paddingVertical: S[2],
-        borderWidth: 1,
-        fontSize: 15,
-        lineHeight: 22,
-    },
-    sendBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: R.full,
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-    },
+  root: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: S[4],
+    paddingVertical: S[3],
+    borderBottomWidth: 1,
+    gap: S[3],
+  },
+  backBtn: { padding: S[1] },
+  avatarSmall: {
+    width: 40, height: 40, borderRadius: R.full,
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { flex: 1 },
+  subjectChipRow: { alignItems: "center", marginVertical: S[4] },
+  subjectChip: {
+    borderRadius: R.full, paddingHorizontal: S[4], paddingVertical: S[2],
+  },
+  listContent: { paddingHorizontal: S[3], paddingVertical: S[3] },
+  bubbleWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: S[2],
+    maxWidth: "80%",
+  },
+  bubbleLeft: { alignSelf: "flex-start" },
+  bubbleRight: { alignSelf: "flex-end", flexDirection: "row-reverse" },
+  avatarMini: {
+    width: 28, height: 28, borderRadius: R.full,
+    alignItems: "center", justifyContent: "center",
+    marginRight: S[2], flexShrink: 0,
+  },
+  bubbleColumn: { flexShrink: 1 },
+  bubble: {
+    borderRadius: R.lg,
+    paddingHorizontal: S[3],
+    paddingVertical: S[2],
+  },
+  bubbleTime: { marginTop: 3, marginHorizontal: S[1] },
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: S[3],
+    paddingVertical: S[2],
+    borderTopWidth: 1,
+    gap: S[2],
+  },
+  textInput: {
+    flex: 1, borderRadius: R.lg,
+    paddingHorizontal: S[3], paddingVertical: S[2],
+    fontSize: 15, maxHeight: 120, minHeight: 40,
+  },
+  sendBtn: {
+    width: 40, height: 40, borderRadius: R.full,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 2,
+  },
 });

@@ -61,14 +61,16 @@ const getStatusIdFromRecord = (item: any): number | null => {
 };
 
 const getStudentIdFromRecord = (item: any): number | null => {
+    // Check nested-object fields before item?.uczen so an object value doesn't
+    // short-circuit the chain (Number({...}) === NaN).
     const raw =
         item?.uczen_id ??
         item?.uczenId ??
-        item?.uczen ??
         item?.student_id ??
         item?.studentId ??
         item?.uczen?.id ??
-        item?.uczen?.pk;
+        item?.uczen?.pk ??
+        item?.uczen;
     const num = Number(raw);
     return Number.isNaN(num) ? null : num;
 };
@@ -429,31 +431,47 @@ export const getAttendance = async (
 
     const candidateUrls = [
         `${getApiBaseUrl()}/api/frekwencja/?${params.toString()}`,
-        `${getApiBaseUrl()}/api/frekwencja/?uczen=${studentId}${
+        `${getApiBaseUrl()}/api/frekwencja/?uczen_id=${studentId}${
             dateFrom ? `&date_from=${encodeURIComponent(dateFrom)}` : ""
         }${dateTo ? `&date_to=${encodeURIComponent(dateTo)}` : ""}`,
     ];
 
     let list: any[] = [];
+    let lastError: Error | null = null;
+    let hadOkResponse = false;
+
     for (const url of candidateUrls) {
         try {
             const res = await authenticatedFetch(url, {
                 headers: { "ADMIN-KEY": ADMIN_KEY },
             });
-            if (!res.ok) continue;
+            if (!res.ok) {
+                lastError = new Error(`Błąd pobierania frekwencji (${res.status})`);
+                continue;
+            }
+            hadOkResponse = true;
             const json = await res.json().catch(() => null);
             list = extractList(json);
             if (list.length > 0) break;
-        } catch {
+        } catch (e) {
+            lastError = e instanceof Error ? e : new Error('Błąd sieci');
             continue;
         }
     }
 
+    // If every candidate URL failed with an error (and none returned ok), surface it
+    // so the UI can show a proper error message instead of an empty list.
+    if (!hadOkResponse && lastError) {
+        throw lastError;
+    }
+
     // Hard filter to the current user only; protects against backends that
     // ignore query params and return global attendance lists.
-    return list
-        .map((item) => mapApiRecord(item, statusesMap))
-        .filter((record) => Number(record.uczen_id) === Number(studentId));
+    const mapped = list.map((item) => mapApiRecord(item, statusesMap));
+    const filtered = mapped.filter((record) => Number(record.uczen_id) === Number(studentId));
+    // If the hard filter removed everything but we had records, skip the filter —
+    // this prevents a uczen_id/user_id pk mismatch from silently hiding all data.
+    return filtered.length > 0 || mapped.length === 0 ? filtered : mapped;
 };
 
 export const getUserAttendance = async (

@@ -4,7 +4,7 @@ export const isAbortError = (err: unknown): boolean =>
 export function fetchWithTimeout(
   url: RequestInfo,
   options: RequestInit = {},
-  ms = 10_000,
+  ms = 30_000,
 ): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);

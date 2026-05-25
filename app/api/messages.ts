@@ -47,6 +47,12 @@ export type MessagesResponse = {
   messages: Message[];
 };
 
+export type Conversation = {
+  partner: { id: number; username: string; first_name: string; last_name: string; };
+  ostatnia_wiadomosc: { id: number; tresc: string; temat: string; nadawca: number; data_wyslania: string; przeczytana: boolean; };
+  nieprzeczytane: number;
+};
+
 const headers = () => ({
   "ADMIN-KEY": ADMIN_KEY,
   "Content-Type": "application/json",
@@ -333,6 +339,21 @@ export const fetchUserMessagesRemote = async (
   } catch (e) {
     console.error("[fetchUserMessagesRemote] unexpected error", e);
     return { messages: [] };
+  }
+};
+
+// GET conversation list (grouped by partner, with last message + unread count)
+export const getConversations = async (): Promise<Conversation[]> => {
+  try {
+    const base = getApiBaseUrl().replace(/\/$/, "");
+    const res = await authenticatedFetch(`${base}/api/wiadomosci/konwersacje/`, { headers: headers() as any });
+    if (!res?.ok) return [];
+    const json = await res.json().catch(() => null);
+    if (!json) return [];
+    return Array.isArray(json) ? json : (json.results ?? []);
+  } catch (e) {
+    console.error("[messages] getConversations error", e);
+    return [];
   }
 };
 
@@ -758,12 +779,18 @@ export const createMessage = async (
       odbiorca_id: payload.odbiorca_id,
       temat: payload.temat,
     });
+    const apiPayload = {
+      nadawca: payload.nadawca_id,
+      odbiorca: payload.odbiorca_id,
+      temat: payload.temat,
+      tresc: payload.tresc,
+    };
     const response = await authenticatedFetch(
       `${getApiBaseUrl()}/api/wiadomosci/`,
       {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(apiPayload),
       },
     );
     if (!response.ok) {

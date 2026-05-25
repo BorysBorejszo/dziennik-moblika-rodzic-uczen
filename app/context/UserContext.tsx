@@ -235,7 +235,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             attendance: resolvedAttendance,
             grades: resolvedGrades,
           };
-          if (mounted) setUserState(u);
+          if (mounted) {
+            setError(null);
+            setUserState(u);
+          }
         }
       } catch {
         // ignore

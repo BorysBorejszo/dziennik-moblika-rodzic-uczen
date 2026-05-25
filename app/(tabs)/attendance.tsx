@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     FlatList,
     Modal,
     type NativeScrollEvent,
@@ -222,6 +223,7 @@ export default function Attendance() {
 
     const [showCompact, setShowCompact] = useState(false);
     const [entries, setEntries] = useState<AttendanceEntry[] | null>(null);
+    const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
@@ -237,8 +239,7 @@ export default function Attendance() {
     const recentEntries = useMemo(() => (entries ?? []).slice(0, 10), [entries]);
 
     const fetchData = useCallback(async () => {
-        if (!studentId) return;
-        setRefreshing(true);
+        if (!studentId) { setLoading(false); return; }
         setFetchError(null);
         try {
             const res = await getUserAttendance(studentId);
@@ -252,6 +253,7 @@ export default function Attendance() {
             setEntries([]);
             setFetchError((error instanceof Error ? error.message : null) ?? 'Błąd ładowania danych');
         } finally {
+            setLoading(false);
             setRefreshing(false);
         }
     }, [studentId, reloadKey]);
@@ -292,7 +294,13 @@ export default function Attendance() {
         []
     );
 
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        void fetchData();
+    }, [fetchData]);
+
     useEffect(() => {
+        setLoading(true);
         void fetchData();
     }, [fetchData]);
 
@@ -365,11 +373,22 @@ export default function Attendance() {
         [subjectSummaries]
     );
 
+    if (loading) {
+        return (
+            <View style={[styles.root, { backgroundColor: palette.background }]}>
+                <Header title="Frekwencja" subtitle="Podglad obecnosci i nieobecnosci" />
+                <View style={styles.loadingCenter}>
+                    <ActivityIndicator size="large" color={palette.primary} />
+                </View>
+            </View>
+        );
+    }
+
     if (fetchError && !refreshing) {
         return (
             <View style={[styles.root, { backgroundColor: palette.background }]}>
                 <Header title="Frekwencja" subtitle="Podglad obecnosci i nieobecnosci" />
-                <ErrorState message={fetchError} onRetry={() => setReloadKey(k => k + 1)} />
+                <ErrorState message={fetchError} onRetry={() => { setLoading(true); setReloadKey(k => k + 1); }} />
             </View>
         );
     }
@@ -399,7 +418,7 @@ export default function Attendance() {
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
-                        onRefresh={fetchData}
+                        onRefresh={onRefresh}
                         tintColor={palette.primary}
                     />
                 }
@@ -874,6 +893,11 @@ export default function Attendance() {
 const styles = StyleSheet.create({
     root: {
         flex: 1,
+    },
+    loadingCenter: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
     },
     scrollContent: {
         paddingBottom: 144,

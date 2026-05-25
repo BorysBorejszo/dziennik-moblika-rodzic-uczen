@@ -73,7 +73,7 @@ export default function UserGate({ children }: { children: React.ReactNode }) {
       </View>
     );
   }
-  if (error) {
+  if (error && !user) {
     return (
       <View style={{ flex: 1, backgroundColor: bg }} className="items-center justify-center px-6">
         <Text className={`${textClass} text-lg font-bold mb-4 text-center`}>
