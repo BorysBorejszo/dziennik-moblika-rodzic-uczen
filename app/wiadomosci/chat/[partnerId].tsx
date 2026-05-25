@@ -189,7 +189,7 @@ export default function ChatScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: palette.background }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.outline }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button">
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/messages')} style={styles.backBtn} accessibilityRole="button">
           <Ionicons name="arrow-back" size={24} color={palette.text} />
         </TouchableOpacity>
         <View style={[styles.avatarSmall, { backgroundColor: palette.primary }]}>

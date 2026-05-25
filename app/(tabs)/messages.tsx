@@ -232,7 +232,16 @@ export default function Messages() {
   const renderAnnouncement = ({ item }: { item: Announcement }) => {
     const avatarChar = item.autor_name?.[0]?.toUpperCase() ?? "O";
     return (
-      <View style={[styles.msgRow, { backgroundColor: palette.surface }, shadow]}>
+      <TouchableOpacity
+        onPress={() =>
+          router.push(
+            `/wiadomosci/ogloszenia/${item.id}?tytul=${encodeURIComponent(item.tytul)}&autor=${encodeURIComponent(item.autor_name ?? "Dyrekcja")}&data=${encodeURIComponent(item.data_publikacji)}`
+          )
+        }
+        activeOpacity={0.85}
+        style={[styles.msgRow, { backgroundColor: palette.surface }, shadow]}
+        accessibilityRole="button"
+      >
         <View style={[styles.avatar, { backgroundColor: palette.primaryFixed }]}>
           <Text style={[T.title, { color: palette.infoText }]}>{avatarChar}</Text>
         </View>
@@ -252,7 +261,8 @@ export default function Messages() {
             {item.tresc}
           </Text>
         </View>
-      </View>
+        <Ionicons name="chevron-forward" size={16} color={palette.textSoft} style={{ marginLeft: 4, marginTop: 2 }} />
+      </TouchableOpacity>
     );
   };
 

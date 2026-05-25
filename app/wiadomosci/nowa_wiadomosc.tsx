@@ -105,7 +105,7 @@ export default function NowaWiadomosc() {
 
             if (result) {
                 Alert.alert("Wysłano", "Wiadomość została wysłana.");
-                router.back();
+                router.replace('/(tabs)/messages');
             } else {
                 Alert.alert("Błąd", "Nie udało się wysłać wiadomości.");
             }
@@ -135,7 +135,7 @@ export default function NowaWiadomosc() {
                     {/* Sticky top bar */}
                     <View style={[styles.topBar, { backgroundColor: palette.background }]}>
                         <TouchableOpacity
-                            onPress={() => router.back()}
+                            onPress={() => router.replace('/(tabs)/messages')}
                             style={[
                                 styles.backBtn,
                                 { backgroundColor: palette.surfaceGlass },

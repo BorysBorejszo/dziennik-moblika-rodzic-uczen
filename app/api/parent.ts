@@ -39,6 +39,7 @@ export type ParentAttendanceEntry = {
   data: string;
   status: string | null;
   godzina_lekcyjna: number | null;
+  subject_name?: string | null;
 };
 
 export type ParentBehaviorPoint = {
@@ -205,20 +206,33 @@ const normalizeAttendanceEntries = async (
   list: any[],
   base: string
 ): Promise<ParentAttendanceEntry[]> => {
-  const statusRes = await authenticatedFetch(`${base}/api/statusy/`, { headers: adminH() });
-  const statusRaw = statusRes.ok ? await statusRes.json().catch(() => []) : [];
-  const statusList = Array.isArray(statusRaw) ? statusRaw : (statusRaw.results ?? []);
-  const statusMap = new Map<number, string>(
-    statusList.map((s: any) => [Number(s.id), String(s.Wartosc ?? s.wartosc ?? s.name ?? s.id)])
+  // ParentAttendanceAPIView already returns status_name and subject_name.
+  // Only fetch the statusy dictionary when the response lacks status_name.
+  const needsStatusLookup = list.some(
+    (e: any) => e.status_name == null && typeof e.status !== "string"
   );
+
+  let statusMap = new Map<number, string>();
+  if (needsStatusLookup) {
+    const statusRes = await authenticatedFetch(`${base}/api/statusy/`, { headers: adminH() });
+    const statusRaw = statusRes.ok ? await statusRes.json().catch(() => []) : [];
+    const statusList = Array.isArray(statusRaw) ? statusRaw : (statusRaw.results ?? []);
+    statusMap = new Map<number, string>(
+      statusList.map((s: any) => [Number(s.id), String(s.Wartosc ?? s.wartosc ?? s.name ?? s.id)])
+    );
+  }
+
   return list.map((e: any) => ({
     id: Number(e.id),
     // backend returns "Data" (capital D) for the date field
     data: String(e.Data ?? e.data ?? ""),
-    status: typeof e.status === "string"
-      ? e.status
-      : (statusMap.get(Number(e.status)) ?? null),
+    status: e.status_name != null
+      ? String(e.status_name)
+      : typeof e.status === "string"
+        ? e.status
+        : (statusMap.get(Number(e.status)) ?? null),
     godzina_lekcyjna: (e.godzina_lekcyjna ?? null) as number | null,
+    subject_name: (e.subject_name ?? null) as string | null,
   }));
 };
 
@@ -262,12 +276,48 @@ export const createParentExcuse = async (
   items: Array<{ data: string; frekwencja?: number }>
 ): Promise<boolean> => {
   try {
-    const res = await authenticatedFetch(`${getApiBaseUrl()}/api/parent/excuses/`, {
+    const base = getApiBaseUrl();
+
+    // 1. Create the formal excuse request (Usprawiedliwienie)
+    const res = await authenticatedFetch(`${base}/api/parent/excuses/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ student_id: studentId, reason, items }),
     });
-    return res.ok || res.status === 201;
+    if (!res.ok) return false;
+
+    // 2. Find the "Usprawiedliwiony" status ID
+    const statusRes = await authenticatedFetch(`${base}/api/statusy/`, {
+      headers: { "ADMIN-KEY": ADMIN_KEY },
+    });
+    if (!statusRes.ok) return true;
+
+    const statusRaw = await statusRes.json().catch(() => []);
+    const statusList: any[] = Array.isArray(statusRaw) ? statusRaw : (statusRaw.results ?? []);
+    const uspStatus = statusList.find((s: any) =>
+      String(s.Wartosc ?? s.wartosc ?? "").toLowerCase().includes("usprawiedliw")
+    );
+    if (!uspStatus) return true;
+
+    // 3. PATCH each selected frekwencja record to "Usprawiedliwiony" immediately
+    const frekwencjaIds = items
+      .map((item) => item.frekwencja)
+      .filter((id): id is number => id != null);
+
+    await Promise.all(
+      frekwencjaIds.map((id) =>
+        authenticatedFetch(`${base}/api/frekwencja/${id}/`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "ADMIN-KEY": ADMIN_KEY,
+          },
+          body: JSON.stringify({ status: uspStatus.id }),
+        }).catch(() => null)
+      )
+    );
+
+    return true;
   } catch {
     return false;
   }

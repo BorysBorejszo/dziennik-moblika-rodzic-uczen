@@ -60,7 +60,7 @@ export default function MessageDetail() {
                     onPress: async () => {
                         const success = await deleteMessage(message.id);
                         if (success) {
-                            router.back();
+                            router.replace('/(tabs)/messages');
                         } else {
                             Alert.alert("Błąd", "Nie udało się usunąć wiadomości.");
                         }
@@ -107,7 +107,7 @@ export default function MessageDetail() {
                 {/* Sticky top bar */}
                 <View style={[styles.topBar, { backgroundColor: palette.background }]}>
                     <TouchableOpacity
-                        onPress={() => router.back()}
+                        onPress={() => router.replace('/(tabs)/messages')}
                         style={[
                             styles.backBtn,
                             { backgroundColor: palette.surfaceGlass },

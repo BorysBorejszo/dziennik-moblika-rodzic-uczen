@@ -343,11 +343,21 @@ export default function ParentAttendance() {
                             <View style={styles.checkboxPlaceholder} />
                           )}
 
-                          <Text style={[T.label, { color: palette.textSoft, flex: 1 }]}>
-                            {r.godzina_lekcyjna != null
-                              ? `Lekcja ${r.godzina_lekcyjna}`
-                              : "—"}
-                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[T.label, { color: palette.textSoft }]}>
+                              {r.godzina_lekcyjna != null
+                                ? `Lekcja ${r.godzina_lekcyjna}`
+                                : "—"}
+                            </Text>
+                            {r.subject_name ? (
+                              <Text
+                                style={[T.label, { color: palette.text, marginTop: 1 }]}
+                                numberOfLines={1}
+                              >
+                                {r.subject_name}
+                              </Text>
+                            ) : null}
+                          </View>
 
                           <View
                             style={[

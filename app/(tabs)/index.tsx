@@ -233,7 +233,7 @@ export default function Home() {
                                             } else if (update.type === "grade") {
                                                 router.push("/grades");
                                             } else {
-                                                router.push("/attendance");
+                                                router.push("/messages");
                                             }
                                         }}
                                     />
